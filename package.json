@@ -1,16 +1,38 @@
 {
-  "name": "titan-botz",
+  "name": "mateo-fmb",
   "version": "1.0.0",
-  "description": "A modular Facebook Messenger bot with admin, coins, auto-restart, and multilingual support.",
+  "description": "MATEO-FMB: A premium Facebook Messenger bot framework with advanced features, modular architecture, and production-ready reliability.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "bot": "node bot.js",
+    "dev": "NODE_ENV=development node bot.js"
   },
+  "keywords": [
+    "facebook-bot",
+    "messenger-bot",
+    "facebook-messenger",
+    "bot",
+    "automation",
+    "ai"
+  ],
+  "author": "Romeoisl",
+  "license": "MIT",
   "dependencies": {
     "ws3-fca": "latest",
     "lowdb": "^2.0.0",
-    "figlet": "^1.7.0"
+    "figlet": "^1.7.0",
+    "dotenv": "^16.0.0"
   },
-  "author": "Team Titan",
-  "license": "MIT"
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Romeoisl/MATEO-FMB.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Romeoisl/MATEO-FMB/issues"
+  },
+  "homepage": "https://github.com/Romeoisl/MATEO-FMB#readme"
 }
