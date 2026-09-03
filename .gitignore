@@ -1,0 +1,45 @@
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+appstate.json
+*.key
+*.pem
+
+# Runtime & Logs
+*.log
+logs/
+node_modules/
+dist/
+build/
+
+# Database & Cache
+*.db
+*.sqlite
+*.sqlite3
+db-cache/
+cache/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+*~
+.project
+.classpath
+
+# Runtime State
+monitor.json
+monitlogs.json
+_monitor_pef.js
+
+# Package Manager
+package-lock.json
+yarn.lock
+
+# Temp Files
+*.tmp
+.temp/
+tmp/
