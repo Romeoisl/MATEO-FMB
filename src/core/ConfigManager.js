@@ -1,7 +1,14 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const DEFAULTS = { botName: 'MATEO-FMB', prefix: '/', adminIDs: [], ownerID: '', welcomeMessage: 'Hello! I am MATEO-FMB. Type /help to see my commands.', allowedGroups: [], language: 'en', ai: { endpoint: '' }, fcaOptions: { online: true, updatePresence: true, selfListen: false, randomUserAgent: false } };
+const DEFAULTS = {
+  botName: 'MATEO-FMB', prefix: '/', adminIDs: [], ownerID: '',
+  welcomeMessage: 'Welcome to MATEO-FMB. Type /help to see what I can do.',
+  allowedGroups: [], language: 'en',
+  fmb: { name: 'FMB', tagline: 'Built for FMB. Powered by its members.', signature: 'MATEO-FMB • FMB', accent: 'FMB', footer: 'Official FMB Bot' },
+  ai: { endpoint: '' },
+  fcaOptions: { online: true, updatePresence: true, selfListen: false, randomUserAgent: false }
+};
 const clone = value => JSON.parse(JSON.stringify(value));
 function merge(base, override) { const result = { ...base }; for (const [key, value] of Object.entries(override || {})) result[key] = value && typeof value === 'object' && !Array.isArray(value) && base[key] && typeof base[key] === 'object' ? merge(base[key], value) : value; return result; }
 class ConfigManager {
