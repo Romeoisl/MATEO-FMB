@@ -29,20 +29,12 @@ class CommandRegistry {
         }
 
         const normalized = {
-          aliases: [],
-          category: 'general',
-          description: 'No description provided.',
-          usage: null,
-          role: 0,
-          cooldown: 0,
-          ...command,
+          aliases: [], category: 'general', description: 'No description provided.', usage: null,
+          role: 0, cooldown: 0, ...command,
         };
         normalized.name = String(normalized.name).trim().toLowerCase();
         normalized.aliases = [...new Set((Array.isArray(normalized.aliases) ? normalized.aliases : [normalized.aliases])
-          .filter(value => value !== null && value !== undefined)
-          .map(String)
-          .map(value => value.trim().toLowerCase())
-          .filter(Boolean))];
+          .filter(value => value !== null && value !== undefined).map(String).map(value => value.trim().toLowerCase()).filter(Boolean))];
         normalized.category = String(normalized.category || 'general').trim().toLowerCase();
         normalized.description = String(normalized.description || 'No description provided.').trim();
         normalized.role = Number.isFinite(Number(normalized.role)) ? Math.max(0, Math.floor(Number(normalized.role))) : 0;
@@ -143,49 +135,49 @@ class CommandRegistry {
       return true;
     }
 
-    const ctx = new CommandContext({
-      api,
-      message,
-      args: tokens,
-      command,
-      db: this.db,
-      config: this.config,
-      permissions: this.permissions,
-      logger: this.logger,
-      registry: this,
-      services: this.services,
-    });
+    const ctx = new CommandContext({ api, message, args: tokens, command, db: this.db, config: this.config,
+      permissions: this.permissions, logger: this.logger, registry: this, services: this.services });
     ctx.group = group || this.services.groups?.get?.(message.threadID);
     ctx.user = await this.db.ensureUser?.(message.senderID, message.senderName || '');
 
-    try {
-      if (command.legacy === true || command.execute.length > 1) {
-        await command.execute(api, message, tokens, this.db, this.config.all(), (key, replacements = {}) => this._translate(key, replacements), () => {}, () => {});
-      } else {
-        await command.execute(ctx);
-      }
+    const run = async () => {
+      try {
+        if (command.legacy === true || command.execute.length > 1) {
+          await command.execute(api, message, tokens, this.db, this.config.all(),
+            (key, replacements = {}) => this._translate(key, replacements), () => {}, () => {});
+        } else {
+          await command.execute(ctx);
+        }
 
-      this._setCooldown(command, message.senderID, message.threadID);
-      if (ctx.user) {
-        ctx.user.commandsUsed = (ctx.user.commandsUsed || 0) + 1;
-        await this.db.write();
+        this._setCooldown(command, message.senderID, message.threadID);
+        if (ctx.user) {
+          ctx.user.commandsUsed = (ctx.user.commandsUsed || 0) + 1;
+          await this.db.write();
+        }
+        this.state?.incrementStat('commandsExecuted');
+        return true;
+      } catch (error) {
+        this.state?.incrementStat('errorsEncountered');
+        this.logger.error(`Command ${command.name} failed:`, error);
+        const text = this.services.formatter?.error('Something went wrong while executing that command.') || 'Something went wrong while executing that command.';
+        try { await api.sendMessage(text, message.threadID); } catch (sendError) { this.logger.error('Failed to send command error response:', sendError); }
+        return true;
       }
-      this.state?.incrementStat('commandsExecuted');
-      return true;
+    };
+
+    try {
+      return this.services.performance?.run ? await this.services.performance.run(run) : await run();
     } catch (error) {
-      this.state?.incrementStat('errorsEncountered');
-      this.logger.error(`Command ${command.name} failed:`, error);
-      const text = this.services.formatter?.error('Something went wrong while executing that command.') || 'Something went wrong while executing that command.';
-      try { await api.sendMessage(text, message.threadID); } catch (sendError) { this.logger.error('Failed to send command error response:', sendError); }
+      this.logger.warn(`Command ${command.name} was rejected by the performance limiter: ${error.message}`);
+      const text = this.services.formatter?.error('The bot is busy right now. Please try again shortly.') || 'The bot is busy right now. Please try again shortly.';
+      try { await api.sendMessage(text, message.threadID); } catch (sendError) { this.logger.error('Failed to send overload response:', sendError); }
       return true;
     }
   }
 
   _translate(key, replacements = {}) {
     let text = String(key);
-    for (const [name, value] of Object.entries(replacements)) {
-      text = text.replace(new RegExp(`{{${name}}}`, 'g'), String(value));
-    }
+    for (const [name, value] of Object.entries(replacements)) text = text.replace(new RegExp(`{{${name}}}`, 'g'), String(value));
     return text;
   }
 }
