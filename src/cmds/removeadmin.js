@@ -1,7 +1,7 @@
 'use strict';
 
 module.exports = {
-  name: 'removeadmin', aliases: ['deladmin'], category: 'group',
+  name: 'demote', aliases: ['rmad'], category: 'group',
   description: 'Remove group-admin access from a user ID or mention.',
   usage: '/removeadmin <userID or @mention>', role: 2, cooldown: 3,
   async execute(ctx) {
