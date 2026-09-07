@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'info',aliases:['about','botinfo'],category:'system',description:'Show information about MATEO-FMB.',usage:'/info',role:0,async execute(ctx){return ctx.reply(ctx.format('MATEO-FMB',[`Version: ${ctx.config.get('version','unknown')}`,`Commands: ${ctx.registry.commands.size}`,`Prefix: ${ctx.prefix}`,ctx.config.get('tagline','A modern Messenger bot.')],{includeTagline:true}));}};
