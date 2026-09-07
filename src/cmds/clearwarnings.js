@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'clearwarnings',aliases:['clearwarns'],category:'admin',description:'Clear all warnings for a user.',usage:'/clearwarnings <userID or @mention>',role:2,cooldown:3,async execute(ctx){const id=ctx.args[0]||Object.values(ctx.message.mentions||{})[0]?.id;if(!id)return ctx.reply(`Usage: ${ctx.prefix}clearwarnings <userID>`);const previous=await ctx.services.moderation.clearWarnings(id,ctx.threadID,ctx.userID);return ctx.reply(`Cleared ${previous} warning(s) for ${id}.`);}};
