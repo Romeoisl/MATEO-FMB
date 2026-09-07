@@ -7,6 +7,8 @@ const StateManager = require('./StateManager');
 const EventBus = require('./EventBus');
 const JsonDatabase = require('./JsonDatabase');
 const PermissionManager = require('./PermissionManager');
+const GroupManager = require('./GroupManager');
+const UserManager = require('./UserManager');
 const CommandRegistry = require('./CommandRegistry');
 const EventLoader = require('./EventLoader');
 const ConnectionManager = require('./ConnectionManager');
@@ -19,7 +21,9 @@ class BotApp {
     this.state = new StateManager(this.config.all(), this.logger);
     this.events = new EventBus();
     this.db = new JsonDatabase({ rootDir, logger: this.logger });
-    this.permissions = new PermissionManager(this.config);
+    this.groups = new GroupManager(this.db);
+    this.users = new UserManager(this.db);
+    this.permissions = new PermissionManager(this.config, this.db);
     this.connection = new ConnectionManager({ config: this.config, state: this.state, events: this.events, logger: this.logger, rootDir });
     this.commands = new CommandRegistry({ commandsDir: path.join(rootDir, 'src', 'cmds'), config: this.config, db: this.db, permissions: this.permissions, logger: this.logger, state: this.state });
     this.eventLoader = new EventLoader({ eventsDir: path.join(rootDir, 'src', 'events'), bus: this.events, logger: this.logger, apiProvider: () => this.connection.api });
@@ -33,7 +37,11 @@ class BotApp {
     await this.db.init();
     this.commands.load();
     this.eventLoader.load();
-    this.events.on('message', async ({ api, event }) => this.commands.execute(api, event));
+    this.events.on('message', async ({ api, event }) => {
+      if (event?.senderID) await this.users.recordMessage(event.senderID, event.senderName || '');
+      if (event?.threadID) await this.groups.ensure(event.threadID);
+      await this.commands.execute(api, event);
+    });
     this.events.on('connection:error', error => this.logger.error('Connection error:', error));
     this._bindShutdownSignals();
     this._initialized = true;
@@ -50,7 +58,15 @@ class BotApp {
 
   status() {
     const status = this.state.getStatus();
-    return { ...status, botName: this.config.get('botName'), commands: this.commands.commands.size, connected: Boolean(this.connection.api), uptime: Date.now() - this.startedAt };
+    return {
+      ...status,
+      botName: this.config.get('botName'),
+      commands: this.commands.commands.size,
+      users: this.db.data?.users?.length || 0,
+      groups: this.db.data?.groups?.length || 0,
+      connected: Boolean(this.connection.api),
+      uptime: Date.now() - this.startedAt,
+    };
   }
 
   _bindShutdownSignals() {
