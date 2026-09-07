@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'profile',aliases:['me'],category:'users',description:'Show your MATEO-FMB profile.',usage:'/profile',role:0,async execute(ctx){const u=ctx.user||await ctx.db.ensureUser(ctx.userID);return ctx.reply(ctx.format('Profile',[`Name: ${u.name||ctx.userID}`,`User ID: ${u.userID}`,`Level: ${u.level}`,`XP: ${u.xp}`,`Messages: ${u.messages}`,`Commands used: ${u.commandsUsed}`,`Coins: ${u.coins||0}`,`Bank: ${u.bank||0}`]));}};
