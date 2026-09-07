@@ -38,7 +38,7 @@ class ConnectionManager {
     try { return JSON.parse(raw); } catch (error) { throw new AppStateError('INVALID', 'AppState invalid'); }
   }
 
-  async connect() {
+  async connect({ beforeListen } = {}) {
     this.stopping = false;
     this.state.setState('status', 'connecting');
     const appState = this._loadAppState();
@@ -58,6 +58,9 @@ class ConnectionManager {
         resolve();
       });
     });
+
+    await this.events.dispatch('authenticated', { api: this.api });
+    if (typeof beforeListen === 'function') await beforeListen(this.api);
 
     this.api.listenMqtt((error, event) => {
       if (error) {
