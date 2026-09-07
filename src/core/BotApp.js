@@ -41,34 +41,14 @@ class BotApp {
     this.connection = new ConnectionManager({ config: this.config, state: this.state, events: this.events, logger: this.logger, rootDir });
 
     const services = {
-      ai: this.ai,
-      groups: this.groups,
-      users: this.users,
-      moderation: this.moderation,
-      formatter: this.formatter,
-      errors: this.errors,
-      safety: this.safety,
-      performance: this.performance,
+      ai: this.ai, groups: this.groups, users: this.users, moderation: this.moderation,
+      formatter: this.formatter, errors: this.errors, safety: this.safety, performance: this.performance,
     };
 
-    this.commands = new CommandRegistry({
-      commandsDir: path.join(rootDir, 'src', 'cmds'),
-      config: this.config,
-      db: this.db,
-      permissions: this.permissions,
-      logger: this.logger,
-      state: this.state,
-      services,
-    });
-
-    this.eventLoader = new EventLoader({
-      eventsDir: path.join(rootDir, 'src', 'events'),
-      bus: this.events,
-      logger: this.logger,
-      apiProvider: () => this.connection.api,
-      services: { ...services, db: this.db, config: this.config },
-    });
-
+    this.commands = new CommandRegistry({ commandsDir: path.join(rootDir, 'src', 'cmds'), config: this.config,
+      db: this.db, permissions: this.permissions, logger: this.logger, state: this.state, services });
+    this.eventLoader = new EventLoader({ eventsDir: path.join(rootDir, 'src', 'events'), bus: this.events,
+      logger: this.logger, apiProvider: () => this.connection.api, services: { ...services, db: this.db, config: this.config } });
     this.health = new HealthServer({ app: this, logger: this.logger });
     this.startedAt = Date.now();
     this._shutdownBound = false;
@@ -79,18 +59,15 @@ class BotApp {
     if (this._initialized) return this;
     try {
       this.eventLoader.load();
-
       this.events.on('message', async ({ api, event }) => {
         try {
           if (event?.senderID) await this.users.recordMessage(event.senderID, event.senderName || '');
           if (event?.threadID) await this.groups.ensure(event.threadID);
-
           const moderation = await this.moderation.inspect(event);
           if (moderation.action !== 'allow') {
             if (api?.sendMessage) await api.sendMessage(this.formatter.box('Moderation', [moderation.reason]), event.threadID);
             return;
           }
-
           await this.commands.execute(api, event);
         } catch (error) {
           this.errors.record(error, { scope: 'message' });
@@ -122,6 +99,8 @@ class BotApp {
     await this.init();
     try {
       this.health.start();
+      this.performance.startMonitoring();
+      this.logger.info(`Performance mode: ${this.performance.mode}.`);
       this.logger.info('Loading credentials...');
       await this.connection.connect({
         beforeListen: async () => {
@@ -140,6 +119,7 @@ class BotApp {
       const safety = this.safety.inspect(error, 'startup');
       this.errors.record(error, { scope: 'start' });
       if (safety.action === 'pause') this.connection.stopping = true;
+      this.performance.stopMonitoring();
       await this.health.stop();
       throw error;
     }
@@ -148,6 +128,7 @@ class BotApp {
   async shutdown(signal = 'manual') {
     this.logger.info(`Shutting down (${signal})...`);
     try {
+      this.performance.stopMonitoring();
       await this.connection.disconnect();
       await this.health.stop();
       this.state.setState('status', 'offline');
@@ -159,28 +140,19 @@ class BotApp {
 
   status() {
     const status = this.state.getStatus();
-    return {
-      ...status,
-      botName: this.config.get('botName'),
-      commands: this.commands.commands.size,
-      users: this.db.data?.users?.length || 0,
-      groups: this.db.data?.groups?.length || 0,
-      connected: Boolean(this.connection.api),
-      uptime: Date.now() - this.startedAt,
-      safety: this.safety.status(),
-      performance: this.performance.snapshot(),
-    };
+    return { ...status, botName: this.config.get('botName'), commands: this.commands.commands.size,
+      users: this.db.data?.users?.length || 0, groups: this.db.data?.groups?.length || 0,
+      connected: Boolean(this.connection.api), uptime: Date.now() - this.startedAt,
+      safety: this.safety.status(), performance: this.performance.snapshot() };
   }
 
   _bindShutdownSignals() {
     if (this._shutdownBound) return;
     this._shutdownBound = true;
-    const shutdown = signal => this.shutdown(signal)
-      .then(() => process.exit(0))
-      .catch(error => {
-        this.errors.record(error, { scope: `shutdown:${signal}` });
-        process.exit(1);
-      });
+    const shutdown = signal => this.shutdown(signal).then(() => process.exit(0)).catch(error => {
+      this.errors.record(error, { scope: `shutdown:${signal}` });
+      process.exit(1);
+    });
     process.once('SIGINT', () => shutdown('SIGINT'));
     process.once('SIGTERM', () => shutdown('SIGTERM'));
   }
