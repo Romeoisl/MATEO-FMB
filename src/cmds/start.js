@@ -1,20 +1,21 @@
+'use strict';
+
 module.exports = {
   name: 'start',
-  description: 'Start the bot in this group',
-  role: 2,
-  execute: async (api, message, args, db, settings, getText, onChat) => {
-    onChat({
-      aliases: ['hello', 'hi', 'hey'],
-      useNameWithoutPrefix: true,
-    });
-
-    if (settings.allowedGroups.includes(message.threadID)) {
-      api.sendMessage('The bot is already started in this group.', message.threadID);
-    } else {
-      settings.allowedGroups.push(message.threadID);
-      const fs = require('fs');
-      fs.writeFileSync('./settings.json', JSON.stringify(settings, null, 2));
-      api.sendMessage('The bot is now started in this group.', message.threadID);
-    }
+  aliases: ['enable'],
+  category: 'group',
+  description: 'Enable MATEO-FMB in this group.',
+  usage: '/start',
+  role: 1,
+  cooldown: 5,
+  async execute(ctx) {
+    const group = await ctx.db.getGroup(ctx.threadID) || await ctx.registry.db.groups;
+    const existing = ctx.db.getGroup(ctx.threadID);
+    if (existing?.enabled) return ctx.reply('MATEO-FMB is already enabled in this group.');
+    const target = existing || { threadID: String(ctx.threadID), enabled: true, prefix: null, welcome: true, goodbye: true, antiSpam: false, antiLink: false, language: 'en', adminIDs: [] };
+    target.enabled = true;
+    if (!existing) ctx.db.data.groups.push(target);
+    await ctx.db.write();
+    return ctx.reply('MATEO-FMB is now enabled in this group.');
   },
 };
