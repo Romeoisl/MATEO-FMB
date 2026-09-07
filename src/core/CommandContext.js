@@ -17,23 +17,21 @@ class CommandContext {
 
   get userID() { return this.message?.senderID; }
   get threadID() { return this.message?.threadID; }
+  get messageID() { return this.message?.messageID; }
   get prefix() { return this.config.get('prefix', '/'); }
 
-  reply(text, ...extra) {
-    return this.api.sendMessage(text, this.threadID, ...extra);
-  }
-
+  reply(text, ...extra) { return this.api.sendMessage(text, this.threadID, ...extra); }
   send(text, ...extra) { return this.reply(text, ...extra); }
-  react(reaction) { return this.api.setMessageReaction(reaction, this.message.messageID, () => {}); }
 
-  permissionLevel() {
-    return this.permissions.levelFor(this.userID, this.threadID);
+  react(reaction) {
+    if (!this.messageID || typeof this.api.setMessageReaction !== 'function') return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      this.api.setMessageReaction(reaction, this.messageID, error => error ? reject(error) : resolve());
+    });
   }
 
-  hasRole(level) {
-    return this.permissions.hasLevel(this.userID, this.threadID, level);
-  }
-
+  permissionLevel() { return this.permissions.levelFor(this.userID, this.threadID); }
+  hasRole(level) { return this.permissions.hasLevel(this.userID, this.threadID, level); }
   isOwner() { return this.permissions.isOwner(this.userID); }
   isAdmin() { return this.hasRole(2); }
   isGroupAdmin() { return this.hasRole(1); }
