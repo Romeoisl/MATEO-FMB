@@ -20,13 +20,29 @@ function printBanner() {
   process.stdout.write(`${banner}\n`);
 }
 
+function printConfig(app) {
+  console.log('[MATEO-FMB] Loading credentials...');
+  console.log(`  Config > botname: ${app.config.get('botName', 'MATEO-FMB')}`);
+  console.log(`  Config > prefix: ${app.config.get('prefix', '/')}`);
+  console.log(`  Config > version: ${app.config.get('version', 'unknown')}`);
+  console.log(`  Config > language: ${app.config.get('language', 'en')}`);
+  console.log(`  Config > appstate: ${process.env.MATEO_APPSTATE_FILE || 'appstate.json'}`);
+  console.log(`  Config > admins: ${app.config.get('adminIDs', []).length}`);
+}
+
 async function main() {
   printBanner();
 
   const app = new BotApp({ rootDir: process.cwd() });
 
   try {
-    await app.start();
+    printConfig(app);
+    await app.init();
+    console.log(`[MATEO-FMB] Commands loaded: ${app.commands.commands.size}`);
+    console.log(`[MATEO-FMB] Users loaded: ${app.db.data?.users?.length || 0}`);
+    console.log('[MATEO-FMB] Logging in...');
+    await app.connection.connect();
+    console.log('[MATEO-FMB] Login successful.');
     app.logger.info(`${app.config.get('botName')} started.`);
   } catch (error) {
     if (error instanceof ConnectionManager.AppStateError) {
