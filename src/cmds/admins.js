@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'admins',aliases:['adminlist'],category:'group',description:'List bot and group administrators.',usage:'/admins',role:0,async execute(ctx){const group=ctx.groups?.get(ctx.threadID)||{}; const bot=ctx.config.get('adminIDs',[]); const owner=ctx.config.get('ownerID',''); const lines=[`Owner: ${owner||'not configured'}`,`Bot admins: ${bot.length?bot.join(', '):'none'}`,`Group admins: ${group.adminIDs?.length?group.adminIDs.join(', '):'none'}`]; return ctx.reply(ctx.format('Administrators',lines));}};
