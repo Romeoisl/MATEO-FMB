@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'uptime',aliases:['up'],category:'system',description:'Show how long MATEO-FMB has been running.',usage:'/uptime',role:0,async execute(ctx){const ms=ctx.services?.app?.status?.()?.uptime||process.uptime()*1000; const s=Math.floor(ms/1000),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),sec=s%60; return ctx.reply(ctx.format('Uptime',[`${d}d ${h}h ${m}m ${sec}s`],{includeTagline:true}));}};
