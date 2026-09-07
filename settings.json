@@ -1,12 +1,11 @@
 {
-  "botName": "Titan-botz",
+  "botName": "MATEO-FMB",
   "prefix": "/",
   "adminIDs": [],
-  "ownerID": "", 
-  "welcomeMessage": "Hello! I am Titan-botz. Type /help to see my commands.",
+  "ownerID": "",
+  "welcomeMessage": "Hello! I am MATEO-FMB. Type /help to see my commands.",
   "allowedGroups": [],
   "language": "en",
-  "restartIntervalMinutes": 60,
   "fcaOptions": {
     "online": true,
     "updatePresence": true,
