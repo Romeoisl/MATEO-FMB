@@ -1,27 +1,19 @@
 'use strict';
 
-const DEFAULTS = Object.freeze({
-  enabled: false,
-  prefix: null,
-  welcome: true,
-  goodbye: true,
-  antiSpam: false,
-  antiLink: false,
-  language: 'en',
-  adminIDs: [],
-});
+const DEFAULTS = Object.freeze({ enabled: false, prefix: null, welcome: true, goodbye: true, antiSpam: false, antiLink: false, language: 'en', adminIDs: [] });
+const clone = value => JSON.parse(JSON.stringify(value));
 
 class GroupManager {
   constructor(db) { this.db = db; }
   get(threadID) {
     const id = String(threadID);
     const existing = this.db.data.groups.find(group => String(group.threadID) === id);
-    return existing || { threadID: id, ...JSON.parse(JSON.stringify(DEFAULTS)) };
+    return existing || { threadID: id, ...clone(DEFAULTS) };
   }
   async ensure(threadID, overrides = {}) {
     const id = String(threadID);
     let group = this.db.data.groups.find(item => String(item.threadID) === id);
-    if (!group) { group = { threadID: id, ...JSON.parse(JSON.stringify(DEFAULTS)), ...overrides }; this.db.data.groups.push(group); }
+    if (!group) { group = { threadID: id, ...clone(DEFAULTS), ...overrides }; this.db.data.groups.push(group); }
     else Object.assign(group, overrides);
     await this.db.write();
     return group;
