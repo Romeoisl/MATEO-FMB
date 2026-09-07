@@ -1,0 +1,3 @@
+'use strict';
+const SAFE=/^[0-9+\-*/%().\s]+$/;
+module.exports={name:'calc',aliases:['calculate'],category:'utility',description:'Calculate a basic arithmetic expression.',usage:'/calc <expression>',cooldown:1,role:0,async execute(ctx){const expr=ctx.args.join(' ');if(!expr||expr.length>100||!SAFE.test(expr))return ctx.reply(ctx.error('Only basic arithmetic is supported.'));try{const result=Function(`"use strict";return (${expr})`)();if(typeof result!=='number'||!Number.isFinite(result))throw new Error('invalid');return ctx.reply(ctx.format('Calculator',[`${expr} = ${result}`]));}catch(_){return ctx.reply(ctx.error('Invalid expression.'));}}};
