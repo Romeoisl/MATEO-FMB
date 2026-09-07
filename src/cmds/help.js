@@ -9,9 +9,10 @@ module.exports = {
   role: 0,
   async execute(ctx) {
     const requested = ctx.args[0]?.toLowerCase();
+
     if (requested) {
       const command = ctx.registry.get(requested);
-      if (!command) return ctx.reply(ctx.formatter?.error(`Unknown command: ${requested}`) || `Unknown command: ${requested}`);
+      if (!command) return ctx.reply(ctx.error(`Unknown command: ${requested}`));
       return ctx.reply(ctx.formatter?.command(command) || `${command.name}\n\n${command.description || 'No description provided.'}`);
     }
 
@@ -23,14 +24,18 @@ module.exports = {
     for (const command of visible) {
       const category = command.category || 'general';
       if (!categories.has(category)) categories.set(category, []);
-      categories.get(category).push(command.name);
+      categories.get(category).push(command);
     }
 
-    const lines = ['Command Center', `${visible.length} commands available`];
-    for (const [category, names] of categories) {
-      lines.push('', `[ ${category.toUpperCase()} ]`, names.map(name => `${ctx.prefix}${name}`).join('  '));
+    const lines = [`${visible.length} command${visible.length === 1 ? '' : 's'} available`];
+    for (const [category, commands] of categories) {
+      lines.push('', `[ ${category.toUpperCase()} ]`);
+      for (const command of commands) {
+        lines.push(`${ctx.prefix}${command.name} — ${command.description || 'No description provided.'}`);
+      }
     }
     lines.push('', `Use ${ctx.prefix}help <command> for details.`);
-    return ctx.reply(ctx.formatter?.box('Help', lines) || lines.join('\n'));
+
+    return ctx.reply(ctx.format('Command Center', lines, { includeTagline: true }));
   },
 };
