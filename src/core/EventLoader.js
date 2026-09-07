@@ -23,15 +23,18 @@ class EventLoader {
         const mod = require(fullPath);
         const definitions = mod.default ? [mod.default] : [mod];
         for (const definition of definitions) {
-          if (!definition?.eventType || typeof definition.run !== 'function') {
+          if (!definition || !definition.eventType || typeof definition.run !== 'function') {
             this.logger.warn(`Skipping invalid event module: ${file}`);
             continue;
           }
 
-          this.bus.on(definition.eventType, async payload => {
-            await definition.run(payload.api || this.apiProvider(), payload.event || payload);
-          });
-          this.logger.info(`Registered event ${definition.eventType} from ${file}`);
+          const eventTypes = Array.isArray(definition.eventType) ? definition.eventType : [definition.eventType];
+          for (const eventType of eventTypes) {
+            this.bus.on(eventType, async payload => {
+              await definition.run(payload.api || this.apiProvider(), payload.event || payload);
+            });
+            this.logger.info(`Registered event ${eventType} from ${file}`);
+          }
         }
       } catch (error) {
         this.logger.error(`Failed to load event ${file}:`, error);
