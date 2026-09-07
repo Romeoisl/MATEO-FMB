@@ -11,10 +11,8 @@ module.exports = {
     const requested = ctx.args[0]?.toLowerCase();
     if (requested) {
       const command = ctx.registry.get(requested);
-      if (!command) return ctx.reply(`Unknown command: ${requested}`);
-      const aliases = command.aliases?.length ? `\nAliases: ${command.aliases.join(', ')}` : '';
-      const usage = command.usage ? `\nUsage: ${command.usage}` : '';
-      return ctx.reply(`${command.name}\n\n${command.description || 'No description provided.'}${usage}${aliases}\n\nMATEO-FMB`);
+      if (!command) return ctx.reply(ctx.formatter?.error(`Unknown command: ${requested}`) || `Unknown command: ${requested}`);
+      return ctx.reply(ctx.formatter?.command(command) || `${command.name}\n\n${command.description || 'No description provided.'}`);
     }
 
     const visible = ctx.registry.list()
@@ -28,20 +26,11 @@ module.exports = {
       categories.get(category).push(command.name);
     }
 
-    const lines = [
-      '╭─ MATEO-FMB ─╮',
-      '│ Command Center',
-      `│ ${visible.length} commands available`,
-      '├────────────',
-    ];
-
+    const lines = ['Command Center', `${visible.length} commands available`];
     for (const [category, names] of categories) {
-      lines.push(category.toUpperCase());
-      lines.push(names.map(name => `${ctx.prefix}${name}`).join(' • '));
-      lines.push('');
+      lines.push('', `[ ${category.toUpperCase()} ]`, names.map(name => `${ctx.prefix}${name}`).join('  '));
     }
-
-    lines.push(`Use ${ctx.prefix}help <command> for details.`, '╰─ MATEO-FMB ─╯');
-    return ctx.reply(lines.join('\n'));
+    lines.push('', `Use ${ctx.prefix}help <command> for details.`);
+    return ctx.reply(ctx.formatter?.box('Help', lines) || lines.join('\n'));
   },
 };
