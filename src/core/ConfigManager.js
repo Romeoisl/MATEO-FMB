@@ -5,12 +5,18 @@ const path = require('path');
 
 const DEFAULTS = {
   botName: 'MATEO-FMB',
+  version: '0.3.0',
+  tagline: 'A modern Messenger bot.',
   prefix: '/',
   adminIDs: [],
   ownerID: '',
   welcomeMessage: 'Welcome to MATEO-FMB. Type /help to see what I can do.',
   allowedGroups: [],
   language: 'en',
+  style: {
+    footer: 'MATEO-FMB',
+    separator: '━━━━━━━━━━━━━━━━',
+  },
   ai: { endpoint: '' },
   fcaOptions: {
     online: true,
@@ -52,6 +58,7 @@ class ConfigManager {
 
     const config = merge(clone(DEFAULTS), userConfig);
     config.botName = process.env.MATEO_BOT_NAME || config.botName;
+    config.version = process.env.MATEO_VERSION || config.version;
     config.prefix = process.env.MATEO_PREFIX || config.prefix;
     config.ownerID = process.env.MATEO_OWNER_ID || config.ownerID;
     config.ai.endpoint = process.env.MATEO_AI_ENDPOINT || config.ai.endpoint;
