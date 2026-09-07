@@ -4,6 +4,14 @@ const fs = require('fs');
 const path = require('path');
 const { login } = require('ws3-fca');
 
+class AppStateError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = 'AppStateError';
+    this.code = code;
+  }
+}
+
 class ConnectionManager {
   constructor({ config, state, events, logger, rootDir = process.cwd() }) {
     this.config = config;
@@ -24,10 +32,10 @@ class ConnectionManager {
 
   _loadAppState() {
     const file = this._appStatePath();
-    if (!fs.existsSync(file)) throw new Error(`Missing AppState: ${file}`);
+    if (!fs.existsSync(file)) throw new AppStateError('MISSING', 'AppState missing');
     const raw = fs.readFileSync(file, 'utf8').trim();
-    if (!raw) throw new Error(`AppState file is empty: ${file}`);
-    try { return JSON.parse(raw); } catch (error) { throw new Error(`Invalid AppState JSON: ${error.message}`); }
+    if (!raw) throw new AppStateError('MISSING', 'AppState missing');
+    try { return JSON.parse(raw); } catch (error) { throw new AppStateError('INVALID', 'AppState invalid'); }
   }
 
   async connect() {
@@ -117,4 +125,5 @@ class ConnectionManager {
   }
 }
 
+ConnectionManager.AppStateError = AppStateError;
 module.exports = ConnectionManager;
