@@ -5,9 +5,11 @@ const { EventEmitter } = require('events');
 class EventBus extends EventEmitter {
   async dispatch(type, payload) {
     const listeners = this.listeners(type);
+    const results = [];
     for (const listener of listeners) {
-      await listener(payload);
+      results.push(await listener(payload));
     }
+    return results;
   }
 }
 
