@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'welcome',aliases:['welcomeon'],category:'group',description:'Enable or disable welcome messages.',usage:'/welcome <on|off>',role:1,async execute(ctx){const v=ctx.args[0]?.toLowerCase();if(!['on','off'].includes(v))return ctx.reply(ctx.error(`Usage: ${ctx.prefix}welcome <on|off>`));await ctx.groups.set(ctx.threadID,'welcome',v==='on');return ctx.reply(ctx.format('Welcome',[`Welcome messages: ${v}`]));}};
