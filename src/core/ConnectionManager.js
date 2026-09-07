@@ -14,6 +14,8 @@ class ConnectionManager {
     this.api = null;
     this.listening = false;
     this.stopping = false;
+    this.reconnectTimer = null;
+    this.reconnectDelay = 5000;
   }
 
   _appStatePath() {
@@ -22,18 +24,10 @@ class ConnectionManager {
 
   _loadAppState() {
     const file = this._appStatePath();
-    if (!fs.existsSync(file)) {
-      throw new Error(`Missing AppState. Put your local AppState at ${file} or set MATEO_APPSTATE_FILE.`);
-    }
-
+    if (!fs.existsSync(file)) throw new Error(`Missing AppState: ${file}`);
     const raw = fs.readFileSync(file, 'utf8').trim();
     if (!raw) throw new Error(`AppState file is empty: ${file}`);
-
-    try {
-      return JSON.parse(raw);
-    } catch (error) {
-      throw new Error(`Invalid AppState JSON: ${error.message}`);
-    }
+    try { return JSON.parse(raw); } catch (error) { throw new Error(`Invalid AppState JSON: ${error.message}`); }
   }
 
   async connect() {
@@ -52,6 +46,7 @@ class ConnectionManager {
         this.api = api;
         this.state.setState('status', 'online');
         this.state.setState('lastConnected', new Date().toISOString());
+        this.reconnectDelay = 5000;
         resolve();
       });
     });
@@ -60,6 +55,7 @@ class ConnectionManager {
       if (error) {
         this.state.incrementStat('errorsEncountered');
         this.events.dispatch('connection:error', error).catch(err => this.logger.error(err));
+        this._scheduleReconnect();
         return;
       }
       this.state.incrementStat('messagesHandled');
@@ -75,10 +71,32 @@ class ConnectionManager {
     return this.api;
   }
 
+  _scheduleReconnect() {
+    if (this.stopping || this.reconnectTimer) return;
+    const delay = this.reconnectDelay;
+    this.reconnectDelay = Math.min(this.reconnectDelay * 2, 120000);
+    this.state.setState('status', 'reconnecting');
+    this.logger.warn(`Connection lost; retrying in ${Math.round(delay / 1000)}s.`);
+
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = null;
+      try {
+        await this.disconnect();
+        await this.connect();
+      } catch (error) {
+        this.logger.error('Reconnect failed:', error.message);
+        this._scheduleReconnect();
+      }
+    }, delay);
+  }
+
   async disconnect() {
-    if (this.stopping) return;
     this.stopping = true;
     this.listening = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.state.setState('status', 'stopping');
 
     try {
