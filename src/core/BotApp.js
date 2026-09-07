@@ -72,8 +72,6 @@ class BotApp {
   async init() {
     if (this._initialized) return this;
     try {
-      await this.db.init();
-      this.commands.load();
       this.eventLoader.load();
 
       this.events.on('message', async ({ api, event }) => {
@@ -111,7 +109,19 @@ class BotApp {
     await this.init();
     try {
       this.health.start();
-      await this.connection.connect();
+      this.logger.info('Loading credentials...');
+      await this.connection.connect({
+        beforeListen: async () => {
+          this.logger.info('Login successful.');
+          this.logger.info('Loading commands...');
+          await this.db.init();
+          this.commands.load();
+          this.logger.info('Commands loaded.');
+          this.logger.info('Loading users...');
+          const userCount = this.db.data?.users?.length || 0;
+          this.logger.info(`Users loaded (${userCount}).`);
+        },
+      });
       return this;
     } catch (error) {
       this.errors.record(error, { scope: 'start' });
