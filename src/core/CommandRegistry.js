@@ -16,7 +16,9 @@ class CommandRegistry {
     if (!fs.existsSync(this.commandsDir)) return this;
     this.commands.clear();
     this.aliases.clear();
-    for (const file of fs.readdirSync(this.commandsDir).filter(f => f.endsWith('.js'))) {
+
+    const files = fs.readdirSync(this.commandsDir).filter(file => file.endsWith('.js')).sort();
+    for (const file of files) {
       const fullPath = path.join(this.commandsDir, file);
       delete require.cache[require.resolve(fullPath)];
       try {
@@ -25,63 +27,167 @@ class CommandRegistry {
           this.logger.warn(`Skipping invalid command module: ${file}`);
           continue;
         }
-        const normalized = { aliases: [], category: 'general', description: 'No description provided.', usage: null, role: 0, cooldown: 0, ...command };
-        normalized.name = String(normalized.name).toLowerCase();
-        normalized.aliases = (normalized.aliases || []).map(String).map(v => v.toLowerCase());
+
+        const normalized = {
+          aliases: [],
+          category: 'general',
+          description: 'No description provided.',
+          usage: null,
+          role: 0,
+          cooldown: 0,
+          ...command,
+        };
+        normalized.name = String(normalized.name).trim().toLowerCase();
+        normalized.aliases = [...new Set((Array.isArray(normalized.aliases) ? normalized.aliases : [normalized.aliases])
+          .filter(value => value !== null && value !== undefined)
+          .map(String)
+          .map(value => value.trim().toLowerCase())
+          .filter(Boolean))];
+        normalized.category = String(normalized.category || 'general').trim().toLowerCase();
+        normalized.description = String(normalized.description || 'No description provided.').trim();
+        normalized.role = Number.isFinite(Number(normalized.role)) ? Math.max(0, Math.floor(Number(normalized.role))) : 0;
+        normalized.cooldown = Number.isFinite(Number(normalized.cooldown)) ? Math.max(0, Number(normalized.cooldown)) : 0;
+
+        if (!normalized.name || /\s/.test(normalized.name)) {
+          this.logger.warn(`Skipping command with invalid name in ${file}.`);
+          continue;
+        }
+        if (this.commands.has(normalized.name) || this.aliases.has(normalized.name)) {
+          this.logger.warn(`Skipping duplicate command name: ${normalized.name}`);
+          continue;
+        }
+
+        const usableAliases = [];
+        for (const alias of normalized.aliases) {
+          if (alias === normalized.name || this.commands.has(alias) || this.aliases.has(alias)) {
+            this.logger.warn(`Ignoring conflicting alias "${alias}" on command ${normalized.name}.`);
+            continue;
+          }
+          usableAliases.push(alias);
+        }
+        normalized.aliases = usableAliases;
         this.commands.set(normalized.name, normalized);
         for (const alias of normalized.aliases) this.aliases.set(alias, normalized.name);
-      } catch (error) { this.logger.error(`Failed to load command ${file}:`, error); }
+      } catch (error) {
+        this.logger.error(`Failed to load command ${file}:`, error);
+      }
     }
     this.logger.info(`Loaded ${this.commands.size} command(s).`);
     return this;
   }
 
-  get(name) { const key = String(name || '').toLowerCase(); return this.commands.get(key) || this.commands.get(this.aliases.get(key)); }
+  get(name) {
+    const key = String(name || '').trim().toLowerCase();
+    return this.commands.get(key) || this.commands.get(this.aliases.get(key));
+  }
+
   list() { return [...this.commands.values()]; }
-  _cooldownKey(c, u, t) { return `${c.name}:${t || 'global'}:${u || 'unknown'}`; }
-  _remainingCooldown(c, u, t) { const s = Number(c.cooldown || 0); return s <= 0 ? 0 : Math.max(0, (this.cooldowns.get(this._cooldownKey(c, u, t)) || 0) - Date.now()); }
-  _setCooldown(c, u, t) { const s = Number(c.cooldown || 0); if (s > 0) this.cooldowns.set(this._cooldownKey(c, u, t), Date.now() + s * 1000); }
-  _prefixFor(threadID) { return this.db.getGroup?.(threadID)?.prefix || this.config.get('prefix', '/'); }
+
+  _cooldownKey(command, userID, threadID) {
+    return `${command.name}:${threadID || 'global'}:${userID || 'unknown'}`;
+  }
+
+  _remainingCooldown(command, userID, threadID) {
+    const seconds = Number(command.cooldown || 0);
+    if (seconds <= 0) return 0;
+    const key = this._cooldownKey(command, userID, threadID);
+    const expiresAt = this.cooldowns.get(key) || 0;
+    if (expiresAt <= Date.now()) {
+      this.cooldowns.delete(key);
+      return 0;
+    }
+    return expiresAt - Date.now();
+  }
+
+  _setCooldown(command, userID, threadID) {
+    const seconds = Number(command.cooldown || 0);
+    if (seconds > 0) this.cooldowns.set(this._cooldownKey(command, userID, threadID), Date.now() + seconds * 1000);
+  }
+
+  _prefixFor(threadID) {
+    return this.db.getGroup?.(threadID)?.prefix || this.config.get('prefix', '/');
+  }
 
   async execute(api, message) {
-    const prefix = this._prefixFor(message?.threadID);
-    const body = String(message?.body || '').trim();
-    if (!body.startsWith(prefix)) return false;
-    const tokens = body.slice(prefix.length).trim().split(/\s+/);
+    if (!api?.sendMessage || !message?.threadID) return false;
+
+    const prefix = String(this._prefixFor(message.threadID) || '/');
+    const body = String(message.body || '').trim();
+    if (!prefix || !body.startsWith(prefix)) return false;
+
+    const input = body.slice(prefix.length).trim();
+    if (!input) return false;
+    const tokens = input.split(/\s+/);
     const name = tokens.shift()?.toLowerCase();
     if (!name) return false;
+
     const command = this.get(name);
     if (!command) return false;
+
     const group = this.db.getGroup?.(message.threadID);
     if (group && group.enabled === false && command.name !== 'start') {
       await api.sendMessage(`MATEO-FMB is disabled here. Ask a bot admin to use ${prefix}start.`, message.threadID);
       return true;
     }
-    if (!this.permissions.hasLevel(message.senderID, message.threadID, Number(command.role || 0))) {
-      await api.sendMessage('You do not have permission to use this command.', message.threadID);
+
+    if (!this.permissions.hasLevel(message.senderID, message.threadID, command.role)) {
+      const formatter = this.services.formatter;
+      await api.sendMessage(formatter?.error('You do not have permission to use this command.') || 'You do not have permission to use this command.', message.threadID);
       return true;
     }
+
     const remaining = this._remainingCooldown(command, message.senderID, message.threadID);
-    if (remaining > 0) { await api.sendMessage(`Please wait ${Math.ceil(remaining / 1000)}s before using this command again.`, message.threadID); return true; }
-    this._setCooldown(command, message.senderID, message.threadID);
-    const ctx = new CommandContext({ api, message, args: tokens, command, db: this.db, config: this.config, permissions: this.permissions, logger: this.logger, registry: this, services: this.services });
+    if (remaining > 0) {
+      const wait = `Please wait ${Math.ceil(remaining / 1000)}s before using this command again.`;
+      await api.sendMessage(this.services.formatter?.error(wait) || wait, message.threadID);
+      return true;
+    }
+
+    const ctx = new CommandContext({
+      api,
+      message,
+      args: tokens,
+      command,
+      db: this.db,
+      config: this.config,
+      permissions: this.permissions,
+      logger: this.logger,
+      registry: this,
+      services: this.services,
+    });
     ctx.group = group || this.services.groups?.get?.(message.threadID);
     ctx.user = await this.db.ensureUser?.(message.senderID, message.senderName || '');
+
     try {
-      if (command.legacy === true || command.execute.length > 1) await command.execute(api, message, tokens, this.db, this.config.all(), (key, replacements = {}) => this._translate(key, replacements), () => {}, () => {});
-      else await command.execute(ctx);
-      if (ctx.user) { ctx.user.commandsUsed = (ctx.user.commandsUsed || 0) + 1; await this.db.write(); }
+      if (command.legacy === true || command.execute.length > 1) {
+        await command.execute(api, message, tokens, this.db, this.config.all(), (key, replacements = {}) => this._translate(key, replacements), () => {}, () => {});
+      } else {
+        await command.execute(ctx);
+      }
+
+      this._setCooldown(command, message.senderID, message.threadID);
+      if (ctx.user) {
+        ctx.user.commandsUsed = (ctx.user.commandsUsed || 0) + 1;
+        await this.db.write();
+      }
       this.state?.incrementStat('commandsExecuted');
       return true;
     } catch (error) {
       this.state?.incrementStat('errorsEncountered');
       this.logger.error(`Command ${command.name} failed:`, error);
-      await api.sendMessage('Something went wrong while executing that command.', message.threadID);
+      const text = this.services.formatter?.error('Something went wrong while executing that command.') || 'Something went wrong while executing that command.';
+      try { await api.sendMessage(text, message.threadID); } catch (sendError) { this.logger.error('Failed to send command error response:', sendError); }
       return true;
     }
   }
 
-  _translate(key, replacements = {}) { let text = String(key); for (const [name, value] of Object.entries(replacements)) text = text.replace(new RegExp(`{{${name}}}`, 'g'), String(value)); return text; }
+  _translate(key, replacements = {}) {
+    let text = String(key);
+    for (const [name, value] of Object.entries(replacements)) {
+      text = text.replace(new RegExp(`{{${name}}}`, 'g'), String(value));
+    }
+    return text;
+  }
 }
 
 module.exports = CommandRegistry;
