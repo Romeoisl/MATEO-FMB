@@ -17,6 +17,7 @@ const EventLoader = require('./EventLoader');
 const ConnectionManager = require('./ConnectionManager');
 const HealthServer = require('./HealthServer');
 const SafetyMonitor = require('./SafetyMonitor');
+const PerformanceManager = require('./PerformanceManager');
 const axios = require('axios');
 const AiProvider = require('../ai/AiProvider');
 
@@ -34,6 +35,7 @@ class BotApp {
     this.formatter = new Formatter(this.config);
     this.errors = new ErrorHandler({ logger: this.logger, state: this.state, formatter: this.formatter });
     this.safety = new SafetyMonitor({ state: this.state, logger: this.logger, config: this.config });
+    this.performance = new PerformanceManager({ config: this.config, state: this.state, logger: this.logger });
     this.ai = new AiProvider({ axios, config: this.config });
     this.moderation = new ModerationManager({ db: this.db, groups: this.groups, permissions: this.permissions, state: this.state, logger: this.logger });
     this.connection = new ConnectionManager({ config: this.config, state: this.state, events: this.events, logger: this.logger, rootDir });
@@ -46,6 +48,7 @@ class BotApp {
       formatter: this.formatter,
       errors: this.errors,
       safety: this.safety,
+      performance: this.performance,
     };
 
     this.commands = new CommandRegistry({
@@ -165,6 +168,7 @@ class BotApp {
       connected: Boolean(this.connection.api),
       uptime: Date.now() - this.startedAt,
       safety: this.safety.status(),
+      performance: this.performance.snapshot(),
     };
   }
 
