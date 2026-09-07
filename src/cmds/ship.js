@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'ship',aliases:['match'],category:'fun',description:'Give two names a playful compatibility score.',usage:'/ship <name1> <name2>',cooldown:2,role:0,async execute(ctx){const a=ctx.args[0],b=ctx.args[1];if(!a||!b)return ctx.reply(ctx.error(`Usage: ${ctx.prefix}ship <name1> <name2>`));let seed=[a,b].join('').toLowerCase().split('').reduce((n,c)=>n+c.charCodeAt(0),0);seed=(seed*9301+49297)%233280;const score=Math.floor(seed/233280*101);return ctx.reply(ctx.format('Ship',[`${a} + ${b}: ${score}%`]));}};
