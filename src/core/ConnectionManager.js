@@ -58,11 +58,18 @@ class ConnectionManager {
         this._scheduleReconnect();
         return;
       }
+
       this.state.incrementStat('messagesHandled');
-      this.events.dispatch('message', { api: this.api, event }).catch(err => {
-        this.state.incrementStat('errorsEncountered');
-        this.logger.error('Message dispatch failed:', err);
-      });
+      const payload = { api: this.api, event };
+      const eventTypes = new Set(['message']);
+      if (event?.type) eventTypes.add(event.type);
+      if (event?.logMessageType) eventTypes.add(event.logMessageType);
+
+      Promise.all([...eventTypes].map(type => this.events.dispatch(type, payload)))
+        .catch(err => {
+          this.state.incrementStat('errorsEncountered');
+          this.logger.error('Event dispatch failed:', err);
+        });
     });
 
     this.listening = true;
