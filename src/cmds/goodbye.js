@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'goodbye',aliases:['goodbyeon'],category:'group',description:'Enable or disable goodbye messages.',usage:'/goodbye <on|off>',role:1,async execute(ctx){const v=ctx.args[0]?.toLowerCase();if(!['on','off'].includes(v))return ctx.reply(ctx.error(`Usage: ${ctx.prefix}goodbye <on|off>`));await ctx.groups.set(ctx.threadID,'goodbye',v==='on');return ctx.reply(ctx.format('Goodbye',[`Goodbye messages: ${v}`]));}};
