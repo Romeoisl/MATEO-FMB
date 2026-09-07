@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'leaderboard',aliases:['top','rich'],category:'economy',description:'Show the richest MATEO-FMB users.',usage:'/leaderboard',role:0,cooldown:10,async execute(ctx){const users=[...ctx.db.data.users].sort((a,b)=>(b.coins||0)-(a.coins||0)).slice(0,10);if(!users.length)return ctx.reply('No users have joined the economy yet.');const lines=['MATEO-FMB LEADERBOARD'];users.forEach((u,i)=>lines.push(`${i+1}. ${u.name||u.userID} — ${u.coins||0} coins`));return ctx.reply(lines.join('\n'));}};
