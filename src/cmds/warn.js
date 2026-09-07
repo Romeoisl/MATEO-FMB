@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'warn',category:'admin',description:'Warn a user and record a moderation action.',usage:'/warn <userID or @mention> [reason]',role:1,cooldown:3,async execute(ctx){const id=ctx.args[0]||Object.values(ctx.message.mentions||{})[0]?.id;if(!id)return ctx.reply(`Usage: ${ctx.prefix}warn <userID> [reason]`);const reason=ctx.args.slice(1).join(' ')||'Manual warning';const count=await ctx.services.moderation.warn(id,ctx.threadID,ctx.userID,reason);return ctx.reply(`Warning issued to ${id}. Total warnings: ${count}`);}};
