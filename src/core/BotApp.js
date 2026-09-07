@@ -16,6 +16,7 @@ const CommandRegistry = require('./CommandRegistry');
 const EventLoader = require('./EventLoader');
 const ConnectionManager = require('./ConnectionManager');
 const HealthServer = require('./HealthServer');
+const SafetyMonitor = require('./SafetyMonitor');
 const axios = require('axios');
 const AiProvider = require('../ai/AiProvider');
 
@@ -32,6 +33,7 @@ class BotApp {
     this.permissions = new PermissionManager(this.config, this.db);
     this.formatter = new Formatter(this.config);
     this.errors = new ErrorHandler({ logger: this.logger, state: this.state, formatter: this.formatter });
+    this.safety = new SafetyMonitor({ state: this.state, logger: this.logger, config: this.config });
     this.ai = new AiProvider({ axios, config: this.config });
     this.moderation = new ModerationManager({ db: this.db, groups: this.groups, permissions: this.permissions, state: this.state, logger: this.logger });
     this.connection = new ConnectionManager({ config: this.config, state: this.state, events: this.events, logger: this.logger, rootDir });
@@ -43,6 +45,7 @@ class BotApp {
       moderation: this.moderation,
       formatter: this.formatter,
       errors: this.errors,
+      safety: this.safety,
     };
 
     this.commands = new CommandRegistry({
@@ -94,7 +97,14 @@ class BotApp {
         }
       });
 
-      this.events.on('connection:error', error => this.errors.record(error, { scope: 'connection' }));
+      this.events.on('connection:error', error => {
+        const safety = this.safety.inspect(error, 'connection');
+        this.errors.record(error, { scope: 'connection' });
+        if (safety.action === 'pause') {
+          this.connection.stopping = true;
+          this.connection.listening = false;
+        }
+      });
       this.events.on('listener:error', ({ type, error }) => this.errors.record(error, { scope: `event:${type}` }));
       this._bindShutdownSignals();
       this._initialized = true;
@@ -124,7 +134,9 @@ class BotApp {
       });
       return this;
     } catch (error) {
+      const safety = this.safety.inspect(error, 'startup');
       this.errors.record(error, { scope: 'start' });
+      if (safety.action === 'pause') this.connection.stopping = true;
       await this.health.stop();
       throw error;
     }
@@ -152,6 +164,7 @@ class BotApp {
       groups: this.db.data?.groups?.length || 0,
       connected: Boolean(this.connection.api),
       uptime: Date.now() - this.startedAt,
+      safety: this.safety.status(),
     };
   }
 
