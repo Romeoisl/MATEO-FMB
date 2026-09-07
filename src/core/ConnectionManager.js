@@ -24,6 +24,7 @@ class ConnectionManager {
     this.stopping = false;
     this.reconnectTimer = null;
     this.reconnectDelay = 5000;
+    this.beforeListen = null;
   }
 
   _appStatePath() {
@@ -38,8 +39,9 @@ class ConnectionManager {
     try { return JSON.parse(raw); } catch (error) { throw new AppStateError('INVALID', 'AppState invalid'); }
   }
 
-  async connect({ beforeListen } = {}) {
+  async connect({ beforeListen = null } = {}) {
     this.stopping = false;
+    if (beforeListen) this.beforeListen = beforeListen;
     this.state.setState('status', 'connecting');
     const appState = this._loadAppState();
     const options = this.config.get('fcaOptions', {});
@@ -60,7 +62,7 @@ class ConnectionManager {
     });
 
     await this.events.dispatch('authenticated', { api: this.api });
-    if (typeof beforeListen === 'function') await beforeListen(this.api);
+    if (typeof this.beforeListen === 'function') await this.beforeListen(this.api);
 
     this.api.listenMqtt((error, event) => {
       if (error) {
@@ -90,7 +92,7 @@ class ConnectionManager {
   }
 
   _scheduleReconnect() {
-    if (this.stopping || this.reconnectTimer) return;
+    if (this.stopping || this.reconnectTimer || this.state.getState('safety.status') === 'suspected_suspension') return;
     const delay = this.reconnectDelay;
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, 120000);
     this.state.setState('status', 'reconnecting');
@@ -103,6 +105,7 @@ class ConnectionManager {
         await this.connect();
       } catch (error) {
         this.logger.error('Reconnect failed:', error.message);
+        this.events.dispatch('connection:error', error).catch(err => this.logger.error(err));
         this._scheduleReconnect();
       }
     }, delay);
