@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const login = require('ws3-fca');
+const { login } = require('ws3-fca');
 
 class ConnectionManager {
   constructor({ config, state, events, logger, rootDir = process.cwd() }) {
