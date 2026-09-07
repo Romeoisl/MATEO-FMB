@@ -1,8 +1,8 @@
 'use strict';
 
 module.exports = {
-  name: 'addadmin',
-  aliases: ['groupadmin'],
+  name: 'promote',
+  aliases: ['addadmin'],
   category: 'group',
   description: 'Grant group-admin access to a user ID or mention.',
   usage: '/addadmin <userID or @mention>',
