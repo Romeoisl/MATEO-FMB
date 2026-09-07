@@ -1,16 +1,22 @@
 'use strict';
 
 module.exports = {
-  name: 'demote', aliases: ['rmad'], category: 'group',
+  name: 'removeadmin',
+  aliases: ['demote', 'rmad'],
+  category: 'group',
   description: 'Remove group-admin access from a user ID or mention.',
-  usage: '/removeadmin <userID or @mention>', role: 2, cooldown: 3,
+  usage: '/removeadmin <userID or @mention>',
+  role: 2,
+  cooldown: 3,
   async execute(ctx) {
     const id = ctx.args[0] || Object.values(ctx.message.mentions || {})[0]?.id;
-    const group = ctx.db.getGroup(ctx.threadID);
     if (!id) return ctx.reply(`Usage: ${ctx.prefix}removeadmin <userID>`);
-    if (!group) return ctx.reply('This group has no configuration yet.');
-    group.adminIDs = (group.adminIDs || []).filter(item => String(item) !== String(id));
-    await ctx.db.write();
+    if (!ctx.groups?.removeAdmin) return ctx.reply('Group management is unavailable.');
+    const group = ctx.groups.get(ctx.threadID);
+    if (!group?.adminIDs?.some(item => String(item) === String(id))) {
+      return ctx.reply(`User ${id} is not a group admin.`);
+    }
+    await ctx.groups.removeAdmin(ctx.threadID, id);
     return ctx.reply(`User ${id} is no longer a group admin.`);
   },
 };
