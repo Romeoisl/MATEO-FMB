@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'choose',aliases:['pick'],category:'fun',description:'Choose randomly from comma-separated options.',usage:'/choose <one, two, three>',cooldown:1,role:0,async execute(ctx){const items=ctx.args.join(' ').split(',').map(s=>s.trim()).filter(Boolean);if(items.length<2)return ctx.reply(ctx.error('Provide at least two comma-separated options.'));return ctx.reply(ctx.format('Choice',[`Selected: ${items[Math.floor(Math.random()*items.length)]}`]));}};
