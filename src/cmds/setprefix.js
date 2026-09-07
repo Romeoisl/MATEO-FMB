@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'setprefix',aliases:['prefix'],category:'group',description:'Change the command prefix for this group.',usage:'/setprefix <prefix>',role:1,async execute(ctx){const p=ctx.args[0]; if(!p||p.length>3||/\s/.test(p))return ctx.reply(ctx.error('Choose a prefix of 1–3 non-space characters.')); await ctx.groups.set(ctx.threadID,'prefix',p); return ctx.reply(ctx.format('Prefix',[`Group prefix is now: ${p}`]));}};
