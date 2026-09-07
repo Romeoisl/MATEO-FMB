@@ -21,22 +21,15 @@ class BotApp {
     this.db = new JsonDatabase({ rootDir, logger: this.logger });
     this.permissions = new PermissionManager(this.config);
 
-    this.connection = new ConnectionManager({
-      config: this.config,
-      state: this.state,
-      events: this.events,
-      logger: this.logger,
-      rootDir,
-    });
-
+    this.connection = new ConnectionManager({ config: this.config, state: this.state, events: this.events, logger: this.logger, rootDir });
     this.commands = new CommandRegistry({
       commandsDir: path.join(rootDir, 'src', 'cmds'),
       config: this.config,
       db: this.db,
       permissions: this.permissions,
       logger: this.logger,
+      state: this.state,
     });
-
     this.eventLoader = new EventLoader({
       eventsDir: path.join(rootDir, 'src', 'events'),
       bus: this.events,
@@ -52,13 +45,8 @@ class BotApp {
     await this.db.init();
     this.commands.load();
     this.eventLoader.load();
-
-    // The command dispatcher is deliberately a normal event listener so commands
-    // and passive events remain separate concerns.
-    this.events.on('message', async ({ api, event }) => {
-      await this.commands.execute(api, event);
-    });
-
+    this.events.on('message', async ({ api, event }) => this.commands.execute(api, event));
+    this.events.on('connection:error', error => this.logger.error('Connection error:', error));
     this._bindShutdownSignals();
     return this;
   }
@@ -77,28 +65,15 @@ class BotApp {
 
   status() {
     const status = this.state.getStatus();
-    return {
-      ...status,
-      botName: this.config.get('botName'),
-      commands: this.commands.commands.size,
-      connected: Boolean(this.connection.api),
-      uptime: Date.now() - this.startedAt,
-    };
+    return { ...status, botName: this.config.get('botName'), commands: this.commands.commands.size, connected: Boolean(this.connection.api), uptime: Date.now() - this.startedAt };
   }
 
   _bindShutdownSignals() {
     if (this._shutdownBound) return;
     this._shutdownBound = true;
-
-    const shutdown = signal => {
-      this.shutdown(signal)
-        .then(() => process.exit(0))
-        .catch(error => {
-          this.logger.error('Shutdown failed:', error);
-          process.exit(1);
-        });
-    };
-
+    const shutdown = signal => this.shutdown(signal)
+      .then(() => process.exit(0))
+      .catch(error => { this.logger.error('Shutdown failed:', error); process.exit(1); });
     process.once('SIGINT', () => shutdown('SIGINT'));
     process.once('SIGTERM', () => shutdown('SIGTERM'));
   }
