@@ -1,46 +1,37 @@
+'use strict';
+
 module.exports = {
   name: 'userinfo',
-  description: 'Displays information about a user',
+  aliases: ['ui', 'whois'],
+  category: 'users',
+  description: 'Display information about a user.',
+  usage: '/userinfo [userID or mention]',
+  cooldown: 3,
   role: 0,
-  execute: async (api, message, args, db, settings, getText) => {
-    let userID;
 
-    if (args[0]) {
-      // Check if the argument is a user ID
-      if (!isNaN(args[0])) {
-        userID = args[0];
-      } else {
-        // Check if the argument is a mention
-        const mention = message.mentions[args[0]];
-        if (mention) {
-          userID = mention.id;
-        }
-      }
-    } else {
-      userID = message.senderID;
-    }
+  async execute(ctx) {
+    let userID = ctx.args[0];
+    if (userID && !/^\d+$/.test(userID)) userID = ctx.message.mentions?.[userID]?.id;
+    userID = userID || ctx.userID;
 
-    const user = db.data.users.find(u => u.userID === userID);
+    const user = await ctx.db.ensureUser(userID);
+    if (!user) return ctx.reply('User not found.');
 
-    if (!user) {
-      api.sendMessage('User not found.', message.threadID);
-      return;
-    }
-
-    api.getUserInfo(userID, (err, userInfo) => {
-      if (err) {
-        console.error(err);
-        api.sendMessage('Error retrieving user information.', message.threadID);
-        return;
-      }
-
-      const profilePicture = `https://graph.facebook.com/${userID}/picture?width=200&height=200`;
-      const userData = `User ID: ${user.userID}\nName: ${userInfo[userID].name}\nCoins: ${user.coins}`;
-
-      api.sendMessage({
-        body: userData,
-        attachment: api.getCurrentUserID() === userID ? null : api.getProfilePicture(userID)
-      }, message.threadID);
+    const name = await new Promise(resolve => {
+      if (typeof ctx.api.getUserInfo !== 'function') return resolve(user.name || userID);
+      ctx.api.getUserInfo(userID, (error, info) => resolve(!error && info?.[userID]?.name ? info[userID].name : (user.name || userID)));
     });
-  }
+
+    user.name = name;
+    await ctx.db.write();
+    return ctx.reply([
+      'MATEO-FMB USER PROFILE',
+      `Name: ${name}`,
+      `User ID: ${userID}`,
+      `Level: ${user.level}`,
+      `XP: ${user.xp}`,
+      `Coins: ${user.coins}`,
+      `Messages: ${user.messages}`,
+    ].join('\n'));
+  },
 };
