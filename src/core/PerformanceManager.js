@@ -33,7 +33,7 @@ class PerformanceManager {
     this.cpuSample = { usage: process.cpuUsage(), time: process.hrtime.bigint() };
     this.eventLoop = monitorEventLoopDelay({ resolution: 20 });
     this.eventLoop.disable();
-    this.network = {
+    this.networkState = {
       active: 0,
       queued: 0,
       inbound: { windowStartedAt: Date.now(), bytes: 0 },
@@ -164,13 +164,13 @@ class PerformanceManager {
       const dropped = this.networkQueue.splice(networkLimit);
       for (const item of dropped) item.reject(new Error('Performance network queue is full; try again shortly.'));
     }
-    this.network.queued = this.networkQueue.length;
+    this.networkState.queued = this.networkQueue.length;
   }
 
   async network(task, { direction = 'both', estimatedBytes = 0 } = {}) {
     if (typeof task !== 'function') throw new TypeError('Network task must be a function.');
     const profile = this.effectiveProfile();
-    if (this.network.active >= profile.networkConcurrency) {
+    if (this.networkState.active >= profile.networkConcurrency) {
       return new Promise((resolve, reject) => {
         this.networkQueue.push({ task, direction, estimatedBytes, resolve, reject });
         this._trimQueues();
@@ -181,26 +181,26 @@ class PerformanceManager {
 
   async _runNetwork(task, direction, estimatedBytes) {
     await this._waitForNetworkBudget(direction, estimatedBytes);
-    this.network.active += 1;
-    this.network.queued = this.networkQueue.length;
+    this.networkState.active += 1;
+    this.networkState.queued = this.networkQueue.length;
     try {
       const result = await task();
       const actual = this._estimateBytes(result);
       this.recordNetwork(direction, actual || estimatedBytes);
       return result;
     } finally {
-      this.network.active = Math.max(0, this.network.active - 1);
+      this.networkState.active = Math.max(0, this.networkState.active - 1);
       this._drainNetwork();
     }
   }
 
   _drainNetwork() {
     const limit = this.effectiveProfile().networkConcurrency;
-    while (this.network.active < limit && this.networkQueue.length) {
+    while (this.networkState.active < limit && this.networkQueue.length) {
       const item = this.networkQueue.shift();
       this._runNetwork(item.task, item.direction, item.estimatedBytes).then(item.resolve, item.reject);
     }
-    this.network.queued = this.networkQueue.length;
+    this.networkState.queued = this.networkQueue.length;
   }
 
   _estimateBytes(value) {
@@ -220,7 +220,7 @@ class PerformanceManager {
       let wait = 0;
       const now = Date.now();
       for (const key of directions) {
-        const bucket = this.network[key];
+        const bucket = this.networkState[key];
         if (now - bucket.windowStartedAt >= 1000) { bucket.windowStartedAt = now; bucket.bytes = 0; }
         const limit = this.effectiveProfile().networkBytesPerSecond;
         if (bucket.bytes + value > limit) wait = Math.max(wait, 1000 - (now - bucket.windowStartedAt));
@@ -232,8 +232,8 @@ class PerformanceManager {
 
   recordNetwork(direction, bytes = 0) {
     const value = Math.max(0, Number(bytes) || 0);
-    if (direction === 'in' || direction === 'both') this.network.inbound.bytes += value;
-    if (direction === 'out' || direction === 'both') this.network.outbound.bytes += value;
+    if (direction === 'in' || direction === 'both') this.networkState.inbound.bytes += value;
+    if (direction === 'out' || direction === 'both') this.networkState.outbound.bytes += value;
   }
 
   async cached(key, task, ttlMs = this.effectiveProfile().cacheTtlMs) {
@@ -317,10 +317,10 @@ class PerformanceManager {
       monitoring: this.monitoring,
       pressure: this.pressure,
       network: {
-        active: this.network.active,
+        active: this.networkState.active,
         queued: this.networkQueue.length,
-        inbound: { ...this.network.inbound },
-        outbound: { ...this.network.outbound },
+        inbound: { ...this.networkState.inbound },
+        outbound: { ...this.networkState.outbound },
       },
       memory: process.memoryUsage(),
       cpu: process.cpuUsage(),
