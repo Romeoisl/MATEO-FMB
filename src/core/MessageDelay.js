@@ -31,8 +31,12 @@ class MessageDelay {
   send(api, text, threadID, ...extra) {
     if (!api?.sendMessage) return Promise.reject(new Error('sendMessage is unavailable.'));
 
+    const callbackIndex = extra.findIndex(value => typeof value === 'function');
+    const callback = callbackIndex >= 0 ? extra[callbackIndex] : null;
+    const args = callbackIndex >= 0 ? extra.filter((_, index) => index !== callbackIndex) : extra;
     const key = String(threadID || 'global');
     const previous = this.queues.get(key) || Promise.resolve();
+
     const task = previous
       .catch(() => {})
       .then(async () => {
@@ -45,13 +49,15 @@ class MessageDelay {
           const done = error => {
             if (settled) return;
             settled = true;
+            if (callback) {
+              try { callback(error || null); } catch (callbackError) { this.logger?.warn?.(`Send callback failed: ${callbackError.message}`); }
+            }
             if (error) reject(error instanceof Error ? error : new Error(String(error)));
             else resolve();
           };
 
           try {
-            const result = api.sendMessage(text, threadID, ...extra, done);
-            // Some FCA-compatible implementations do not use callbacks.
+            const result = api.sendMessage(text, threadID, ...args, done);
             if (result && typeof result.then === 'function') result.then(() => done(), done);
           } catch (error) {
             done(error);
