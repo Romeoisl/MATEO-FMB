@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'setwelcome',category:'group',description:'Enable or disable group welcome handling.',usage:'/setwelcome on|off',role:1,cooldown:2,async execute(ctx){const v=String(ctx.args[0]||'').toLowerCase();if(!['on','off'].includes(v))return ctx.reply(ctx.error('Usage: /setwelcome on|off'));await ctx.groups.set(ctx.threadID,'welcome',v==='on');return ctx.reply(ctx.format('Welcome',[`Welcome messages: ${v}`]));}};
