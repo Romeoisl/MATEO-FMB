@@ -2,6 +2,9 @@
 
 const DEFAULTS = Object.freeze({
   enabled: false,
+  approved: false,
+  approvedAt: null,
+  approvedBy: null,
   prefix: null,
   welcome: true,
   goodbye: true,
@@ -33,7 +36,30 @@ class GroupManager {
     } else {
       Object.assign(group, overrides);
       group.adminIDs = Array.isArray(group.adminIDs) ? [...new Set(group.adminIDs.map(String))] : [];
+      if (typeof group.approved !== 'boolean') group.approved = false;
+      if (!Object.prototype.hasOwnProperty.call(group, 'approvedAt')) group.approvedAt = null;
+      if (!Object.prototype.hasOwnProperty.call(group, 'approvedBy')) group.approvedBy = null;
     }
+    await this.db.write();
+    return group;
+  }
+
+  async approve(threadID, actorID) {
+    const group = await this.ensure(threadID);
+    group.approved = true;
+    group.enabled = true;
+    group.approvedAt = new Date().toISOString();
+    group.approvedBy = String(actorID || '');
+    await this.db.write();
+    return group;
+  }
+
+  async revokeApproval(threadID, actorID) {
+    const group = await this.ensure(threadID);
+    group.approved = false;
+    group.enabled = false;
+    group.approvedAt = null;
+    group.approvedBy = String(actorID || '');
     await this.db.write();
     return group;
   }
