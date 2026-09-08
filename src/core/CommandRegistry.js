@@ -63,7 +63,7 @@ class CommandRegistry {
     const command = this.get(name); if (!command) return false;
     const group = this.db.getGroup?.(message.threadID);
 
-    if (!this._isGroupApproved(message.threadID) && command.name !== 'approve') {
+    if (group && !this._isGroupApproved(message.threadID) && command.name !== 'approve') {
       await api.sendMessage(this.services.formatter?.box('Approval Required', [
         'MATEO-FMB is present, but this group is not approved yet.',
         'Commands are locked until a bot admin approves this thread.',
