@@ -18,6 +18,10 @@ const DEFAULTS = {
     separator: '━━━━━━━━━━━━━━━━',
   },
   ai: { endpoint: '' },
+  performance: {
+    mode: 'normal',
+    rssLimitMb: 0,
+  },
   fcaOptions: {
     online: true,
     updatePresence: true,
@@ -62,6 +66,9 @@ class ConfigManager {
     config.prefix = process.env.MATEO_PREFIX || config.prefix;
     config.ownerID = process.env.MATEO_OWNER_ID || config.ownerID;
     config.ai.endpoint = process.env.MATEO_AI_ENDPOINT || config.ai.endpoint;
+    config.performance.mode = String(process.env.MATEO_PERFORMANCE || config.performance.mode || 'normal').toLowerCase();
+    const rssLimitMb = Number(process.env.MATEO_RSS_LIMIT_MB || config.performance.rssLimitMb || 0);
+    config.performance.rssLimitMb = Number.isFinite(rssLimitMb) && rssLimitMb > 0 ? rssLimitMb : 0;
     return config;
   }
 
