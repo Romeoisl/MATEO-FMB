@@ -1,13 +1,12 @@
 'use strict';
 
 /**
- * Handles Messenger thread lifecycle events in one place.
+ * Handles Messenger thread lifecycle events.
  *
- * Responsibilities:
- * - announce members joining/leaving when enabled
- * - announce when the bot itself joins a thread
- * - notify configured bot admins if the bot is removed
- * - keep event failures isolated from the MQTT listener
+ * - Announces member joins/leaves when enabled.
+ * - Notifies bot admins when MATEO-FMB is added to a group.
+ * - Notifies bot admins if MATEO-FMB is removed.
+ * - Keeps lifecycle failures isolated from the MQTT listener.
  */
 
 const getGroup = (services, threadID) =>
@@ -25,6 +24,12 @@ const adminIDs = services => {
 
 const memberName = participant =>
   participant?.fullName || participant?.name || participant?.userFbId || 'A Facebook user';
+
+const notifyAdmins = async (api, services, message) => {
+  for (const adminID of adminIDs(services)) {
+    await send(api, message, adminID);
+  }
+};
 
 module.exports = {
   eventType: ['log:subscribe', 'log:unsubscribe'],
@@ -48,10 +53,23 @@ module.exports = {
       );
 
       if (botJoined) {
-        const message = group?.welcomeMessage
+        const threadName = event.threadName || event.threadID;
+        const botMessage = group?.welcomeMessage
           || services.config?.get?.('welcomeMessage', 'MATEO-FMB is now active in this group.')
           || 'MATEO-FMB is now active in this group.';
-        await send(api, message, event.threadID);
+
+        await send(api, botMessage, event.threadID);
+
+        await notifyAdmins(
+          api,
+          services,
+          [
+            'MATEO-FMB GROUP ALERT',
+            `Added to: ${threadName}`,
+            `Thread ID: ${event.threadID}`,
+            'Status: Active',
+          ].join('\n'),
+        );
         return;
       }
 
@@ -73,11 +91,16 @@ module.exports = {
 
     if (botID && leftID === botID) {
       const threadName = event.threadName || event.threadID;
-      const message = `MATEO-FMB was removed from "${threadName}".`;
-
-      for (const adminID of adminIDs(services)) {
-        await send(api, message, adminID);
-      }
+      await notifyAdmins(
+        api,
+        services,
+        [
+          'MATEO-FMB GROUP ALERT',
+          `Removed from: ${threadName}`,
+          `Thread ID: ${event.threadID}`,
+          'Status: Offline',
+        ].join('\n'),
+      );
       return;
     }
 
