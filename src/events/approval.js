@@ -2,8 +2,8 @@
 
 /**
  * Approval gate for newly discovered Messenger groups.
- * The bot stays in the group but remains completely disabled until
- * a configured bot admin approves the thread.
+ * The bot stays in the group but remains disabled until a configured bot
+ * admin approves the thread.
  */
 
 const send = async (api, text, threadID) => {
@@ -34,7 +34,6 @@ module.exports = {
     const botJoined = botID && participants.some(
       participant => String(participant?.userFbId || '') === botID,
     );
-
     if (!botJoined) return;
 
     const groups = services.groups;
@@ -48,38 +47,43 @@ module.exports = {
       return;
     }
 
-    const threadName = event.threadName || event.threadID;
-    const message = [
-      '╭─ MATEO-FMB',
-      '│ GROUP APPROVAL REQUIRED',
-      '│',
-      `│ Group: ${threadName}`,
-      `│ Thread ID: ${event.threadID}`,
-      '│',
-      '│ This group is not approved yet.',
-      '│ MATEO-FMB will stay silent until an',
-      '│ authorized bot admin approves it.',
-      '│',
-      '│ Admin command:',
-      `│ /approve ${event.threadID}`,
-      '╰─ Awaiting approval ─╯',
-    ].join('\n');
-
-    await send(api, message, event.threadID);
-
     await groups?.ensure?.(event.threadID, {
       approved: false,
       enabled: false,
     });
 
+    const botName = String(services.config?.get?.('botName', 'MATEO-FMB') || 'MATEO-FMB');
+    const prefix = String(services.config?.get?.('prefix', '/') || '/');
+    const threadName = event.threadName || event.threadID;
+
+    await send(api, [
+      `╭─ ${botName}`,
+      '│ GROUP APPROVAL REQUIRED',
+      '│',
+      `│ Group    : ${threadName}`,
+      `│ Thread ID: ${event.threadID}`,
+      '│',
+      `│ ${botName} is currently in approval mode.`,
+      '│ Commands are locked until a bot admin',
+      '│ approves this group.',
+      '│',
+      '│ Admin approval:',
+      `│ ${prefix}approve ${event.threadID}`,
+      '│',
+      '╰─ Awaiting approval ─╯',
+    ].join('\n'), event.threadID);
+
     for (const adminID of adminIDs(services)) {
       await send(api, [
-        'MATEO-FMB • APPROVAL REQUEST',
-        `Group: ${threadName}`,
-        `Thread ID: ${event.threadID}`,
-        'Status: Pending approval',
-        '',
-        `Approve: /approve ${event.threadID}`,
+        `╭─ ${botName}`,
+        '│ APPROVAL REQUEST',
+        '│',
+        `│ Group    : ${threadName}`,
+        `│ Thread ID: ${event.threadID}`,
+        '│ Status   : Pending approval',
+        '│',
+        `│ Approve: ${prefix}approve ${event.threadID}`,
+        '╰─ Action required ─╯',
       ].join('\n'), adminID);
     }
   },
