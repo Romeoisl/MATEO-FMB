@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'queue',aliases:['queues'],category:'system',description:'Show workload queue state.',usage:'/queue',role:0,cooldown:4,async execute(ctx){const p=ctx.services.performance?.snapshot();return ctx.reply(ctx.format('Queues',[`Tasks active: ${p?.activeTasks||0}`,`Tasks queued: ${p?.queuedTasks||0}`,`Network active: ${p?.network?.active||0}`,`Network queued: ${p?.network?.queued||0}`]));}};
