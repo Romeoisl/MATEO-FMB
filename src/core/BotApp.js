@@ -65,7 +65,6 @@ class BotApp {
       this.events.on('message', async ({ api, event }) => {
         try {
           if (event?.senderID) await this.users.recordMessage(event.senderID, event.senderName || '');
-          if (event?.threadID) await this.groups.ensure(event.threadID);
           const moderation = await this.moderation.inspect(event);
           if (moderation.action !== 'allow') {
             if (api?.sendMessage) await api.sendMessage(this.formatter.box('Moderation', [moderation.reason]), event.threadID);
