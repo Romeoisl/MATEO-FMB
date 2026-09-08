@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'bonus',category:'economy',description:'Claim a small random bonus once per day.',usage:'/bonus',role:0,cooldown:5,async execute(ctx){const u=await ctx.db.ensureUser(ctx.userID);const now=Date.now();if(u.bonusAt&&now-u.bonusAt<86400000)return ctx.reply(ctx.error('Your daily bonus is already claimed.'));const amount=50+Math.floor(Math.random()*151);u.coins=(u.coins||0)+amount;u.bonusAt=now;await ctx.db.write();return ctx.reply(ctx.format('Bonus',[`You received ${amount} coins.`]));}};
