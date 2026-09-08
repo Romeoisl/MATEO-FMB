@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'random',aliases:['rand'],category:'utility',description:'Generate a random number in a range.',usage:'/random [min] [max]',role:0,cooldown:2,async execute(ctx){let a=Number(ctx.args[0]);let b=Number(ctx.args[1]);if(!Number.isFinite(a))a=1;if(!Number.isFinite(b))b=100;if(a>b)[a,b]=[b,a];a=Math.ceil(a);b=Math.floor(b);return ctx.reply(ctx.format('Random',[String(a+Math.floor(Math.random()*(b-a+1)))]));}};
