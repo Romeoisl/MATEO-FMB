@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'xpboard',aliases:['topxp'],category:'users',description:'Show users with the most XP.',usage:'/xpboard',role:0,cooldown:5,async execute(ctx){const users=[...(ctx.db.data?.users||[])].sort((a,b)=>(b.xp||0)-(a.xp||0)).slice(0,10);return ctx.reply(ctx.format('XP leaderboard',users.length?users.map((u,i)=>`${i+1}. ${u.name||u.userID} — level ${u.level||1}, ${u.xp||0} XP`):['No users yet.']));}};
