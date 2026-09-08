@@ -13,12 +13,13 @@ class AppStateError extends Error {
 }
 
 class ConnectionManager {
-  constructor({ config, state, events, logger, rootDir = process.cwd() }) {
+  constructor({ config, state, events, logger, rootDir = process.cwd(), performance = null }) {
     this.config = config;
     this.state = state;
     this.events = events;
     this.logger = logger;
     this.rootDir = rootDir;
+    this.performance = performance;
     this.api = null;
     this.listening = false;
     this.stopping = false;
@@ -37,6 +38,10 @@ class ConnectionManager {
     const raw = fs.readFileSync(file, 'utf8').trim();
     if (!raw) throw new AppStateError('MISSING', 'AppState missing');
     try { return JSON.parse(raw); } catch (error) { throw new AppStateError('INVALID', 'AppState invalid'); }
+  }
+
+  _estimateInboundBytes(event) {
+    try { return Buffer.byteLength(JSON.stringify(event || {}), 'utf8'); } catch (_) { return 0; }
   }
 
   async connect({ beforeListen = null } = {}) {
@@ -73,12 +78,14 @@ class ConnectionManager {
       }
 
       this.state.incrementStat('messagesHandled');
+      const inboundBytes = this._estimateInboundBytes(event);
+      this.performance?.recordNetwork('in', inboundBytes);
       const payload = { api: this.api, event };
       const eventTypes = new Set(['message']);
       if (event?.type) eventTypes.add(event.type);
       if (event?.logMessageType) eventTypes.add(event.logMessageType);
 
-      Promise.all([...eventTypes].map(type => this.events.dispatch(type, payload)))
+      this.performance?.run(() => Promise.all([...eventTypes].map(type => this.events.dispatch(type, payload))))
         .catch(err => {
           this.state.incrementStat('errorsEncountered');
           this.logger.error('Event dispatch failed:', err);
