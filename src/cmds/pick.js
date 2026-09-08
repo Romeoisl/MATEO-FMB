@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'pick',category:'fun',description:'Choose randomly from options separated by |.',usage:'/pick a | b | c',role:0,cooldown:2,async execute(ctx){const options=ctx.args.join(' ').split('|').map(s=>s.trim()).filter(Boolean);if(!options.length)return ctx.reply(ctx.error('Provide options separated by |.'));return ctx.reply(ctx.format('Choice',[options[Math.floor(Math.random()*options.length)]]));}};
