@@ -47,6 +47,13 @@ class CommandRegistry {
   _setCooldown(command, userID, threadID) { const seconds = Number(command.cooldown || 0); if (seconds > 0) this.cooldowns.set(this._cooldownKey(command, userID, threadID), Date.now() + seconds * 1000); }
   _prefixFor(threadID) { return this.db.getGroup?.(threadID)?.prefix || this.config.get('prefix', '/'); }
 
+  _isGroupApproved(threadID) {
+    const group = this.db.getGroup?.(threadID);
+    if (group?.approved === true) return true;
+    const allowed = this.config.get('allowedGroups', []);
+    return Array.isArray(allowed) && allowed.map(String).includes(String(threadID));
+  }
+
   async execute(api, message) {
     if (!api?.sendMessage || !message?.threadID) return false;
     const prefix = String(this._prefixFor(message.threadID) || '/'); const body = String(message.body || '').trim();
@@ -56,15 +63,16 @@ class CommandRegistry {
     const command = this.get(name); if (!command) return false;
     const group = this.db.getGroup?.(message.threadID);
 
-    if (group && group.approved === false && command.name !== 'approve') {
-      const isGlobalAdmin = this.permissions.hasLevel(message.senderID, message.threadID, 2);
-      if (!isGlobalAdmin) {
-        await api.sendMessage(this.services.formatter?.error('This group is awaiting MATEO-FMB approval.') || 'This group is awaiting MATEO-FMB approval.', message.threadID);
-        return true;
-      }
+    if (message.threadID && !_isPrivateThread(message.threadID) && !this._isGroupApproved(message.threadID) && command.name !== 'approve') {
+      await api.sendMessage(this.services.formatter?.box('Approval Required', [
+        'MATEO-FMB is present, but this group is not approved yet.',
+        'Commands are locked until a bot admin approves this thread.',
+        `Ask a bot admin to use ${prefix}approve ${message.threadID}`,
+      ]) || `MATEO-FMB is awaiting approval. Ask a bot admin to use ${prefix}approve ${message.threadID}.`, message.threadID);
+      return true;
     }
 
-    if (group && group.enabled === false && command.name !== 'start' && command.name !== 'approve') { await api.sendMessage(`MATEO-FMB is disabled here. Ask a bot admin to use ${prefix}start.`, message.threadID); return true; }
+    if (group && group.enabled === false && !['start', 'approve'].includes(command.name)) { await api.sendMessage(`MATEO-FMB is disabled here. Ask a bot admin to use ${prefix}start.`, message.threadID); return true; }
     if (!this.permissions.hasLevel(message.senderID, message.threadID, command.role)) { const formatter = this.services.formatter; await api.sendMessage(formatter?.error('You do not have permission to use this command.') || 'You do not have permission to use this command.', message.threadID); return true; }
     const remaining = this._remainingCooldown(command, message.senderID, message.threadID);
     if (remaining > 0) { const wait = `Please wait ${Math.ceil(remaining / 1000)}s before using this command again.`; await api.sendMessage(this.services.formatter?.error(wait) || wait, message.threadID); return true; }
@@ -91,6 +99,10 @@ class CommandRegistry {
   }
 
   _translate(key, replacements = {}) { let text = String(key); for (const [name, value] of Object.entries(replacements)) text = text.replace(new RegExp(`{{${name}}}`, 'g'), String(value)); return text; }
+}
+
+function _isPrivateThread(threadID) {
+  return String(threadID).startsWith('user:');
 }
 
 module.exports = CommandRegistry;
