@@ -67,7 +67,6 @@ module.exports = {
       '│',
       `│ Name      : ${botName}`,
       `│ Prefix    : ${prefix}`,
-      `│ Nickname  : ${nicknameUpdated ? 'Updated' : 'Not changed'}`,
       '│ Status    : Online & ready',
       '│',
       `│ Use ${prefix}help to explore my commands.`,
