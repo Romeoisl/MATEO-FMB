@@ -63,7 +63,7 @@ class CommandRegistry {
     const command = this.get(name); if (!command) return false;
     const group = this.db.getGroup?.(message.threadID);
 
-    if (message.threadID && !_isPrivateThread(message.threadID) && !this._isGroupApproved(message.threadID) && command.name !== 'approve') {
+    if (!this._isGroupApproved(message.threadID) && command.name !== 'approve') {
       await api.sendMessage(this.services.formatter?.box('Approval Required', [
         'MATEO-FMB is present, but this group is not approved yet.',
         'Commands are locked until a bot admin approves this thread.',
@@ -99,10 +99,6 @@ class CommandRegistry {
   }
 
   _translate(key, replacements = {}) { let text = String(key); for (const [name, value] of Object.entries(replacements)) text = text.replace(new RegExp(`{{${name}}}`, 'g'), String(value)); return text; }
-}
-
-function _isPrivateThread(threadID) {
-  return String(threadID).startsWith('user:');
 }
 
 module.exports = CommandRegistry;
