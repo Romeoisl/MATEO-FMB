@@ -6,6 +6,11 @@
   "welcomeMessage": "Hello! I am MATEO-FMB. Type /help to see my commands.",
   "allowedGroups": [],
   "language": "en",
+  "messageDelay": {
+    "enabled": true,
+    "minMs": 2000,
+    "maxMs": 3000
+  },
   "fcaOptions": {
     "online": true,
     "updatePresence": true,
