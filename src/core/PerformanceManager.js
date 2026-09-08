@@ -3,6 +3,7 @@
 const os = require('os');
 const fs = require('fs');
 const v8 = require('v8');
+const { monitorEventLoopDelay } = require('perf_hooks');
 
 const PROFILES = Object.freeze({
   low: Object.freeze({ intervalMs: 15000, maxConcurrent: 1, cacheTtlMs: 30000, historyLimit: 100, cpuBudgetPercent: 20, networkConcurrency: 1, networkBytesPerSecond: 256 * 1024, description: 'Conservative mode for low-end hosting and shared machines.' }),
@@ -23,28 +24,86 @@ class PerformanceManager {
     this.mode = this._normalizeMode(config?.get('performance.mode', 'normal'));
     this.appliedAt = Date.now();
     this.activeTasks = 0;
-    this.queue = [];
+    this.taskQueue = [];
+    this.networkQueue = [];
     this.cache = new Map();
     this.monitorTimer = null;
     this.monitoring = false;
     this.pressure = { rssRatio: 0, heapRatio: 0, cpuPercent: 0, lagMs: 0, diskRatio: 0, level: 'normal' };
     this.cpuSample = { usage: process.cpuUsage(), time: process.hrtime.bigint() };
-    this.network = { active: 0, queued: 0, windowStartedAt: Date.now(), bytesIn: 0, bytesOut: 0 };
+    this.eventLoop = monitorEventLoopDelay({ resolution: 20 });
+    this.eventLoop.disable();
+    this.network = {
+      active: 0,
+      queued: 0,
+      inbound: { windowStartedAt: Date.now(), bytes: 0 },
+      outbound: { windowStartedAt: Date.now(), bytes: 0 },
+    };
   }
 
   static get PROFILES() { return PROFILES; }
   get profile() { return PROFILES[this.mode]; }
   _normalizeMode(mode) { const value = String(mode || '').trim().toLowerCase(); return PROFILES[value] ? value : 'normal'; }
 
+  _readCgroupNumber(file) {
+    try {
+      if (!fs.existsSync(file)) return null;
+      const value = fs.readFileSync(file, 'utf8').trim();
+      if (!value || value === 'max' || value === 'infinity') return null;
+      const number = Number(value);
+      return Number.isFinite(number) && number > 0 ? number : null;
+    } catch (_) { return null; }
+  }
+
+  _detectCgroupMemoryBytes() {
+    const v2 = this._readCgroupNumber('/sys/fs/cgroup/memory.max');
+    if (v2) return v2;
+    return this._readCgroupNumber('/sys/fs/cgroup/memory/memory.limit_in_bytes');
+  }
+
+  _detectCgroupCpuCount() {
+    try {
+      const raw = fs.existsSync('/sys/fs/cgroup/cpu.max') ? fs.readFileSync('/sys/fs/cgroup/cpu.max', 'utf8').trim() : '';
+      const [quota, period] = raw.split(/\s+/);
+      if (quota && quota !== 'max' && Number(period) > 0) return Math.max(1, Number(quota) / Number(period));
+      const oldQuota = this._readCgroupNumber('/sys/fs/cgroup/cpu/cpu.cfs_quota_us');
+      const oldPeriod = this._readCgroupNumber('/sys/fs/cgroup/cpu/cpu.cfs_period_us');
+      if (oldQuota && oldPeriod) return Math.max(1, oldQuota / oldPeriod);
+    } catch (_) { /* fall back to host CPU count */ }
+    return null;
+  }
+
   _detectHost() {
-    const cpuCount = Math.max(1, os.cpus()?.length || 1);
-    const totalMemory = os.totalmem();
-    const containerLimit = Number(this.config?.get('performance.rssLimitMb', 0) || 0);
-    const isContainer = Boolean(process.env.CONTAINER || process.env.DOCKER || process.env.PODMAN || fs.existsSync('/.dockerenv') || fs.existsSync('/run/.containerenv'));
-    const isDesktop = process.stdin.isTTY || process.stdout.isTTY;
-    const platform = process.platform;
-    const memoryBudgetMb = containerLimit > 0 ? containerLimit : Math.max(256, Math.min(2048, Math.floor(totalMemory / 1024 / 1024 * (isDesktop ? 0.08 : 0.15))));
-    return { platform, cpuCount, totalMemoryMb: Math.round(totalMemory / 1024 / 1024), isContainer, isDesktop, memoryBudgetMb };
+    const hostCpuCount = Math.max(1, os.cpus()?.length || 1);
+    const hostMemory = os.totalmem();
+    const cgroupMemory = this._detectCgroupMemoryBytes();
+    const cgroupCpu = this._detectCgroupCpuCount();
+    const configuredMemory = Number(this.config?.get('performance.rssLimitMb', 0) || 0);
+    const memoryLimitMb = configuredMemory > 0
+      ? configuredMemory
+      : Math.round(Math.min(hostMemory, cgroupMemory || hostMemory) / 1024 / 1024);
+    const isContainer = Boolean(process.env.CONTAINER || process.env.DOCKER || process.env.PODMAN || fs.existsSync('/.dockerenv') || fs.existsSync('/run/.containerenv') || cgroupMemory);
+    const isDesktop = !isContainer && (process.platform === 'win32' || process.platform === 'darwin' || process.stdin.isTTY || process.stdout.isTTY);
+    const cpuCount = Math.max(1, Math.min(hostCpuCount, Math.ceil(cgroupCpu || hostCpuCount)));
+    const hostClass = isContainer ? 'container' : isDesktop ? 'desktop' : 'server';
+    const memoryBudgetMb = configuredMemory > 0
+      ? Math.max(128, Math.floor(configuredMemory * 0.75))
+      : hostClass === 'desktop'
+        ? Math.max(256, Math.min(2048, Math.floor(memoryLimitMb * 0.08)))
+        : Math.max(256, Math.min(2048, Math.floor(memoryLimitMb * (hostClass === 'container' ? 0.60 : 0.15))));
+    return {
+      platform: process.platform,
+      hostClass,
+      cpuCount,
+      hostCpuCount,
+      cgroupCpuCount: cgroupCpu ? Number(cgroupCpu.toFixed(2)) : null,
+      totalMemoryMb: Math.round(hostMemory / 1024 / 1024),
+      memoryLimitMb,
+      cgroupMemoryDetected: Boolean(cgroupMemory),
+      isContainer,
+      isDesktop,
+      memoryBudgetMb,
+    };
   }
 
   effectiveProfile() {
@@ -63,7 +122,12 @@ class PerformanceManager {
     this.state?.setState('performance.mode', next);
     this.state?.setState('performance.appliedAt', new Date(this.appliedAt).toISOString());
     this.logger?.info(`Performance mode changed to ${next}.`);
-    this._trimQueue();
+    if (this.monitoring) {
+      clearInterval(this.monitorTimer);
+      this.monitorTimer = setInterval(() => this._samplePressure(), this.profile.intervalMs);
+      this.monitorTimer.unref?.();
+    }
+    this._trimQueues();
     this._trimCache();
     return { ok: true, mode: next, profile: this.effectiveProfile() };
   }
@@ -72,61 +136,104 @@ class PerformanceManager {
     if (typeof task !== 'function') throw new TypeError('Performance task must be a function.');
     const limit = this.effectiveProfile().maxConcurrent;
     if (this.activeTasks < limit) return this._runTask(task);
-    return new Promise((resolve, reject) => { this.queue.push({ task, resolve, reject }); this._trimQueue(); });
+    return new Promise((resolve, reject) => { this.taskQueue.push({ task, resolve, reject }); this._trimQueues(); });
   }
 
   async _runTask(task) {
     this.activeTasks += 1;
     try { return await task(); }
-    finally { this.activeTasks = Math.max(0, this.activeTasks - 1); this._drain(); }
+    finally { this.activeTasks = Math.max(0, this.activeTasks - 1); this._drainTasks(); }
   }
 
-  _drain() {
+  _drainTasks() {
     const limit = this.effectiveProfile().maxConcurrent;
-    while (this.activeTasks < limit && this.queue.length) {
-      const item = this.queue.shift();
+    while (this.activeTasks < limit && this.taskQueue.length) {
+      const item = this.taskQueue.shift();
       this._runTask(item.task).then(item.resolve, item.reject);
     }
   }
 
-  _trimQueue() {
-    const maxQueue = Math.max(10, this.effectiveProfile().maxConcurrent * 8);
-    if (this.queue.length <= maxQueue) return;
-    const dropped = this.queue.splice(maxQueue);
-    for (const item of dropped) item.reject(new Error('Performance queue is full; try again shortly.'));
+  _trimQueues() {
+    const taskLimit = Math.max(10, this.effectiveProfile().maxConcurrent * 8);
+    const networkLimit = Math.max(10, this.effectiveProfile().networkConcurrency * 8);
+    if (this.taskQueue.length > taskLimit) {
+      const dropped = this.taskQueue.splice(taskLimit);
+      for (const item of dropped) item.reject(new Error('Performance task queue is full; try again shortly.'));
+    }
+    if (this.networkQueue.length > networkLimit) {
+      const dropped = this.networkQueue.splice(networkLimit);
+      for (const item of dropped) item.reject(new Error('Performance network queue is full; try again shortly.'));
+    }
+    this.network.queued = this.networkQueue.length;
   }
 
   async network(task, { direction = 'both', estimatedBytes = 0 } = {}) {
+    if (typeof task !== 'function') throw new TypeError('Network task must be a function.');
     const profile = this.effectiveProfile();
     if (this.network.active >= profile.networkConcurrency) {
-      await new Promise((resolve, reject) => this.queue.push({ task: async () => this.network(task, { direction, estimatedBytes }), resolve, reject }));
-      return;
+      return new Promise((resolve, reject) => {
+        this.networkQueue.push({ task, direction, estimatedBytes, resolve, reject });
+        this._trimQueues();
+      });
     }
-    await this._waitForNetworkBudget(estimatedBytes);
-    this.network.active += 1;
-    try {
-      const result = await task();
-      this.recordNetwork(direction, estimatedBytes);
-      return result;
-    } finally { this.network.active = Math.max(0, this.network.active - 1); this._drain(); }
+    return this._runNetwork(task, direction, estimatedBytes);
   }
 
-  async _waitForNetworkBudget(bytes) {
-    const limit = this.effectiveProfile().networkBytesPerSecond;
-    const now = Date.now();
-    if (now - this.network.windowStartedAt >= 1000) { this.network.windowStartedAt = now; this.network.bytesIn = 0; this.network.bytesOut = 0; }
-    if (Math.max(this.network.bytesIn, this.network.bytesOut) + Math.max(0, Number(bytes) || 0) > limit) {
-      await sleep(Math.max(25, 1000 - (now - this.network.windowStartedAt)));
-      this.network.windowStartedAt = Date.now();
-      this.network.bytesIn = 0;
-      this.network.bytesOut = 0;
+  async _runNetwork(task, direction, estimatedBytes) {
+    await this._waitForNetworkBudget(direction, estimatedBytes);
+    this.network.active += 1;
+    this.network.queued = this.networkQueue.length;
+    try {
+      const result = await task();
+      const actual = this._estimateBytes(result);
+      this.recordNetwork(direction, actual || estimatedBytes);
+      return result;
+    } finally {
+      this.network.active = Math.max(0, this.network.active - 1);
+      this._drainNetwork();
+    }
+  }
+
+  _drainNetwork() {
+    const limit = this.effectiveProfile().networkConcurrency;
+    while (this.network.active < limit && this.networkQueue.length) {
+      const item = this.networkQueue.shift();
+      this._runNetwork(item.task, item.direction, item.estimatedBytes).then(item.resolve, item.reject);
+    }
+    this.network.queued = this.networkQueue.length;
+  }
+
+  _estimateBytes(value) {
+    try {
+      if (Buffer.isBuffer(value)) return value.length;
+      if (typeof value === 'string') return Buffer.byteLength(value, 'utf8');
+      if (value?.data && Buffer.isBuffer(value.data)) return value.data.length;
+      const length = Number(value?.headers?.['content-length'] || value?.headers?.['Content-Length'] || 0);
+      return Number.isFinite(length) && length > 0 ? length : 0;
+    } catch (_) { return 0; }
+  }
+
+  async _waitForNetworkBudget(direction, bytes) {
+    const value = Math.max(0, Number(bytes) || 0);
+    const directions = direction === 'both' ? ['inbound', 'outbound'] : direction === 'in' ? ['inbound'] : ['outbound'];
+    for (;;) {
+      let wait = 0;
+      const now = Date.now();
+      for (const key of directions) {
+        const bucket = this.network[key];
+        if (now - bucket.windowStartedAt >= 1000) { bucket.windowStartedAt = now; bucket.bytes = 0; }
+        const limit = this.effectiveProfile().networkBytesPerSecond;
+        if (bucket.bytes + value > limit) wait = Math.max(wait, 1000 - (now - bucket.windowStartedAt));
+      }
+      if (!wait) return;
+      await sleep(Math.max(25, wait));
     }
   }
 
   recordNetwork(direction, bytes = 0) {
     const value = Math.max(0, Number(bytes) || 0);
-    if (direction === 'in' || direction === 'both') this.network.bytesIn += value;
-    if (direction === 'out' || direction === 'both') this.network.bytesOut += value;
+    if (direction === 'in' || direction === 'both') this.network.inbound.bytes += value;
+    if (direction === 'out' || direction === 'both') this.network.outbound.bytes += value;
   }
 
   async cached(key, task, ttlMs = this.effectiveProfile().cacheTtlMs) {
@@ -145,12 +252,29 @@ class PerformanceManager {
 
   startMonitoring() {
     if (this.monitorTimer) return;
-    this.monitoring = true; this._samplePressure();
+    this.monitoring = true;
+    this.eventLoop.enable();
+    this._samplePressure();
     this.monitorTimer = setInterval(() => this._samplePressure(), this.profile.intervalMs);
     this.monitorTimer.unref?.();
   }
 
-  stopMonitoring() { if (this.monitorTimer) clearInterval(this.monitorTimer); this.monitorTimer = null; this.monitoring = false; }
+  stopMonitoring() {
+    if (this.monitorTimer) clearInterval(this.monitorTimer);
+    this.monitorTimer = null;
+    this.monitoring = false;
+    this.eventLoop.disable();
+  }
+
+  _diskPressure() {
+    try {
+      if (typeof fs.statfsSync !== 'function') return 0;
+      const stat = fs.statfsSync(this.config?.rootDir || process.cwd());
+      const total = Number(stat.blocks) * Number(stat.bsize);
+      const free = Number(stat.bavail) * Number(stat.bsize);
+      return total > 0 ? Math.max(0, Math.min(1, 1 - free / total)) : 0;
+    } catch (_) { return 0; }
+  }
 
   _samplePressure() {
     const memory = process.memoryUsage();
@@ -159,11 +283,17 @@ class PerformanceManager {
     const heapRatio = heapLimit > 0 ? memory.heapUsed / heapLimit : 0;
     const rssRatio = rssLimit > 0 ? memory.rss / rssLimit : 0;
     const cpu = this._cpuPercent();
-    const level = cpu >= this.profile.cpuBudgetPercent + 10 || heapRatio >= 0.9 || rssRatio >= 0.9 ? 'critical' : cpu >= this.profile.cpuBudgetPercent || heapRatio >= 0.75 || rssRatio >= 0.75 ? 'high' : 'normal';
-    this.pressure = { ...this.pressure, rssRatio, heapRatio, cpuPercent: cpu, level };
+    const lagMs = Number(this.eventLoop.percentile(95) || 0) / 1e6;
+    const diskRatio = this._diskPressure();
+    this.eventLoop.reset();
+    const level = cpu >= this.profile.cpuBudgetPercent + 10 || heapRatio >= 0.9 || rssRatio >= 0.9 || lagMs >= 250 || diskRatio >= 0.95
+      ? 'critical'
+      : cpu >= this.profile.cpuBudgetPercent || heapRatio >= 0.75 || rssRatio >= 0.75 || lagMs >= 100 || diskRatio >= 0.90
+        ? 'high' : 'normal';
+    this.pressure = { rssRatio, heapRatio, cpuPercent: cpu, lagMs, diskRatio, level };
     this.state?.setState('performance.pressure', this.pressure);
-    if (level !== 'normal') this.logger?.warn(`Host pressure ${level}: CPU ${cpu.toFixed(1)}%, RSS ${(rssRatio * 100).toFixed(1)}%.`);
-    this._trimQueue(); this._trimCache(); this._drain();
+    if (level !== 'normal') this.logger?.warn(`Host pressure ${level}: CPU ${cpu.toFixed(1)}%, RSS ${(rssRatio * 100).toFixed(1)}%, lag ${lagMs.toFixed(1)}ms.`);
+    this._trimQueues(); this._trimCache(); this._drainTasks(); this._drainNetwork();
   }
 
   _cpuPercent() {
@@ -176,7 +306,25 @@ class PerformanceManager {
   }
 
   snapshot() {
-    return { mode: this.mode, ...this.effectiveProfile(), appliedAt: new Date(this.appliedAt).toISOString(), host: this.host, activeTasks: this.activeTasks, queuedTasks: this.queue.length, cacheEntries: this.cache.size, monitoring: this.monitoring, pressure: this.pressure, network: { ...this.network }, memory: process.memoryUsage(), cpu: process.cpuUsage() };
+    return {
+      mode: this.mode,
+      ...this.effectiveProfile(),
+      appliedAt: new Date(this.appliedAt).toISOString(),
+      host: this.host,
+      activeTasks: this.activeTasks,
+      queuedTasks: this.taskQueue.length,
+      cacheEntries: this.cache.size,
+      monitoring: this.monitoring,
+      pressure: this.pressure,
+      network: {
+        active: this.network.active,
+        queued: this.networkQueue.length,
+        inbound: { ...this.network.inbound },
+        outbound: { ...this.network.outbound },
+      },
+      memory: process.memoryUsage(),
+      cpu: process.cpuUsage(),
+    };
   }
 }
 
