@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'dice',category:'fun',description:'Roll multiple dice.',usage:'/dice [count] [sides]',role:0,cooldown:2,async execute(ctx){const count=Math.max(1,Math.min(10,Number(ctx.args[0])||2));const sides=Math.max(2,Math.min(100,Number(ctx.args[1])||6));const rolls=Array.from({length:count},()=>1+Math.floor(Math.random()*sides));return ctx.reply(ctx.format('Dice',[`Rolls: ${rolls.join(', ')}`,`Total: ${rolls.reduce((a,b)=>a+b,0)}`]));}};
