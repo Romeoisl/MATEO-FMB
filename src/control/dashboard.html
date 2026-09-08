@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MATEO-FMB Control</title>
+<style>body{font-family:system-ui,sans-serif;max-width:1100px;margin:2rem auto;padding:0 1rem;background:#111;color:#eee}h1{margin-bottom:.25rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}.card{background:#1c1c1c;border:1px solid #333;border-radius:12px;padding:1rem}.value{font-size:1.5rem;font-weight:700}.muted{color:#999}pre{white-space:pre-wrap;overflow:auto}</style>
+</head>
+<body><h1>MATEO-FMB</h1><p class="muted">Runtime control and observability</p><div class="grid" id="cards"></div><div class="card"><h2>Raw status</h2><pre id="raw">Loading…</pre></div>
+<script>
+async function refresh(){const r=await fetch('/status',{cache:'no-store'});const s=await r.json();const p=s.performance||{};const cards=[['Status',s.status],['Connection',s.connected?'online':'offline'],['Performance',p.mode],['Pressure',p.pressure?.level],['CPU',`${(p.pressure?.cpuPercent||0).toFixed(1)}%`],['Event-loop lag',`${(p.pressure?.lagMs||0).toFixed(1)} ms`],['Commands',s.commands],['Users',s.users],['Groups',s.groups],['Recovery failures',s.recovery?.failures||0],['Safety',s.safety?.status||'unknown'],['Queued tasks',p.queuedTasks||0]];document.getElementById('cards').innerHTML=cards.map(([k,v])=>`<div class="card"><div class="muted">${k}</div><div class="value">${v}</div></div>`).join('');document.getElementById('raw').textContent=JSON.stringify(s,null,2)}refresh().catch(e=>document.getElementById('raw').textContent=e);setInterval(()=>refresh().catch(()=>{}),5000);
+</script></body></html>
