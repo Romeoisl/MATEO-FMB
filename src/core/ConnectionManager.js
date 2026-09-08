@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { login } = require('ws3-fca');
+const MessageDelay = require('./MessageDelay');
 
 class AppStateError extends Error {
   constructor(code, message) {
@@ -20,7 +21,9 @@ class ConnectionManager {
     this.logger = logger;
     this.rootDir = rootDir;
     this.performance = performance;
+    this.messageDelay = new MessageDelay({ config, logger });
     this.api = null;
+    this.rawApi = null;
     this.listening = false;
     this.stopping = false;
     this.reconnectTimer = null;
@@ -44,6 +47,18 @@ class ConnectionManager {
     try { return Buffer.byteLength(JSON.stringify(event || {}), 'utf8'); } catch (_) { return 0; }
   }
 
+  _wrapApi(api) {
+    const delay = this.messageDelay;
+    return new Proxy(api, {
+      get(target, property, receiver) {
+        if (property === 'sendMessage') {
+          return (text, threadID, ...extra) => delay.send(target, text, threadID, ...extra);
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+  }
+
   async connect({ beforeListen = null } = {}) {
     this.stopping = false;
     if (beforeListen) this.beforeListen = beforeListen;
@@ -58,7 +73,8 @@ class ConnectionManager {
           reject(error instanceof Error ? error : new Error(String(error)));
           return;
         }
-        this.api = api;
+        this.rawApi = api;
+        this.api = this._wrapApi(api);
         this.state.setState('status', 'online');
         this.state.setState('lastConnected', new Date().toISOString());
         this.reconnectDelay = 5000;
@@ -128,11 +144,13 @@ class ConnectionManager {
     this.state.setState('status', 'stopping');
 
     try {
-      if (this.api?.logout) await new Promise(resolve => this.api.logout(() => resolve()));
+      if (this.rawApi?.logout) await new Promise(resolve => this.rawApi.logout(() => resolve()));
     } catch (error) {
       this.logger.warn('Logout failed:', error.message);
     } finally {
+      this.messageDelay.clear();
       this.api = null;
+      this.rawApi = null;
       this.state.setState('status', 'offline');
     }
   }
