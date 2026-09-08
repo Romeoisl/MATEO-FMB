@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'pressure',aliases:['load'],category:'system',description:'Show current resource pressure.',usage:'/pressure',role:0,cooldown:4,async execute(ctx){const p=ctx.services.performance?.snapshot()?.pressure;return ctx.reply(ctx.format('Resource pressure',[`Level: ${p?.level||'unknown'}`,`CPU: ${Number(p?.cpuPercent||0).toFixed(1)}%`,`RSS ratio: ${((p?.rssRatio||0)*100).toFixed(1)}%`,`Heap ratio: ${((p?.heapRatio||0)*100).toFixed(1)}%`,`Lag: ${Number(p?.lagMs||0).toFixed(1)} ms`]));}};
