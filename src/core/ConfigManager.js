@@ -13,21 +13,10 @@ const DEFAULTS = {
   welcomeMessage: 'Welcome to MATEO-FMB. Type /help to see what I can do.',
   allowedGroups: [],
   language: 'en',
-  style: {
-    footer: 'MATEO-FMB',
-    separator: '━━━━━━━━━━━━━━━━',
-  },
+  style: { footer: 'MATEO-FMB', separator: '━━━━━━━━━━━━━━━━' },
   ai: { endpoint: '' },
-  performance: {
-    mode: 'normal',
-    rssLimitMb: 0,
-  },
-  fcaOptions: {
-    online: true,
-    updatePresence: true,
-    selfListen: false,
-    randomUserAgent: false,
-  },
+  performance: { mode: 'normal', rssLimitMb: 0 },
+  fcaOptions: { online: true, updatePresence: true, selfListen: false, randomUserAgent: false },
 };
 
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -53,13 +42,9 @@ class ConfigManager {
   _load() {
     let userConfig = {};
     if (fs.existsSync(this.file)) {
-      try {
-        userConfig = JSON.parse(fs.readFileSync(this.file, 'utf8'));
-      } catch (error) {
-        throw new Error(`Invalid configuration file ${this.file}: ${error.message}`);
-      }
+      try { userConfig = JSON.parse(fs.readFileSync(this.file, 'utf8')); }
+      catch (error) { throw new Error(`Invalid configuration file ${this.file}: ${error.message}`); }
     }
-
     const config = merge(clone(DEFAULTS), userConfig);
     config.botName = process.env.MATEO_BOT_NAME || config.botName;
     config.version = process.env.MATEO_VERSION || config.version;
@@ -77,9 +62,28 @@ class ConfigManager {
     return value === undefined ? fallback : value;
   }
 
-  all() {
-    return clone(this.config);
+  set(key, value, { persist = true } = {}) {
+    const parts = String(key).split('.').filter(Boolean);
+    if (!parts.length) throw new TypeError('Configuration key is required.');
+    let target = this.config;
+    for (const part of parts.slice(0, -1)) {
+      if (!target[part] || typeof target[part] !== 'object' || Array.isArray(target[part])) target[part] = {};
+      target = target[part];
+    }
+    target[parts.at(-1)] = value;
+    if (persist) this.save();
+    return value;
   }
+
+  save() {
+    fs.mkdirSync(path.dirname(this.file), { recursive: true });
+    const tempFile = `${this.file}.${process.pid}.tmp`;
+    fs.writeFileSync(tempFile, `${JSON.stringify(this.config, null, 2)}\n`, 'utf8');
+    fs.renameSync(tempFile, this.file);
+    return this;
+  }
+
+  all() { return clone(this.config); }
 }
 
 module.exports = ConfigManager;
