@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'muteuser',aliases:['setmute'],category:'group',description:'Mark a user as muted in local state.',usage:'/muteuser <userID>',role:1,cooldown:3,async execute(ctx){const id=ctx.args[0];if(!id)return ctx.reply(ctx.error('Provide a user ID.'));const u=await ctx.db.ensureUser(id);u.muted=true;await ctx.db.write();return ctx.reply(ctx.format('Mute',[`User ${id} is marked muted locally.`]));}};
