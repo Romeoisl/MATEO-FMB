@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'serverinfo',aliases:['runtimeinfo'],category:'system',description:'Show runtime and host details.',usage:'/serverinfo',role:0,cooldown:4,async execute(ctx){const os=require('os');return ctx.reply(ctx.format('Server info',[`Node: ${process.version}`,`Platform: ${os.platform()} ${os.arch()}`,`CPU cores: ${os.cpus().length}`,`Uptime: ${Math.floor(process.uptime())}s`]));}};
