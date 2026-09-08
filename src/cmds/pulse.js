@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'pulse',category:'system',description:'Show a compact runtime pulse.',usage:'/pulse',role:0,cooldown:3,async execute(ctx){const p=ctx.services.performance?.snapshot();return ctx.reply(ctx.format('Pulse',[`Mode: ${p?.mode||'unknown'}`,`Pressure: ${p?.pressure?.level||'unknown'}`,`Tasks: ${p?.activeTasks||0}/${p?.queuedTasks||0}`,`Network: ${p?.network?.active||0}/${p?.network?.queued||0}`]));}};
