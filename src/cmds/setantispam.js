@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'setantispam',aliases:['antispamset'],category:'group',description:'Enable or disable anti-spam protection.',usage:'/setantispam on|off',role:1,cooldown:2,async execute(ctx){const v=String(ctx.args[0]||'').toLowerCase();if(!['on','off'].includes(v))return ctx.reply(ctx.error('Usage: /setantispam on|off'));await ctx.groups.set(ctx.threadID,'antiSpam',v==='on');return ctx.reply(ctx.format('Anti-spam',[`Status: ${v}`]));}};
