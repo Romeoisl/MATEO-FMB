@@ -1,5 +1,7 @@
 'use strict';
 
+const v8 = require('v8');
+
 const PROFILES = Object.freeze({
   low: Object.freeze({ intervalMs: 15000, maxConcurrent: 1, cacheTtlMs: 30000, historyLimit: 100, description: 'Minimum resource usage for low-end hosting.' }),
   medium: Object.freeze({ intervalMs: 10000, maxConcurrent: 2, cacheTtlMs: 20000, historyLimit: 250, description: 'Balanced resource usage for small servers.' }),
@@ -25,7 +27,6 @@ class PerformanceManager {
   }
 
   static get PROFILES() { return PROFILES; }
-
   get profile() { return PROFILES[this.mode]; }
 
   setMode(mode) {
@@ -37,14 +38,17 @@ class PerformanceManager {
     this.state?.setState('performance.appliedAt', new Date(this.appliedAt).toISOString());
     this.logger?.info(`Performance mode changed to ${next}.`);
     this._trimQueue();
+    this._trimCache();
+    if (this.monitoring) {
+      this.stopMonitoring();
+      this.startMonitoring();
+    }
     return { ok: true, mode: next, profile: this.profile };
   }
 
   async run(task) {
     if (typeof task !== 'function') throw new TypeError('Performance task must be a function.');
-
     if (this.activeTasks < this.profile.maxConcurrent) return this._runTask(task);
-
     return new Promise((resolve, reject) => {
       this.queue.push({ task, resolve, reject });
       this._trimQueue();
@@ -53,9 +57,8 @@ class PerformanceManager {
 
   async _runTask(task) {
     this.activeTasks += 1;
-    try {
-      return await task();
-    } finally {
+    try { return await task(); }
+    finally {
       this.activeTasks = Math.max(0, this.activeTasks - 1);
       this._drain();
     }
@@ -81,9 +84,8 @@ class PerformanceManager {
     const hit = this.cache.get(cacheKey);
     if (hit && hit.expiresAt > now) return hit.value;
     if (hit) this.cache.delete(cacheKey);
-
     const value = await this.run(task);
-    this.cache.set(cacheKey, { value, expiresAt: now + Math.max(0, Number(ttlMs) || 0) });
+    this.cache.set(cacheKey, { value, expiresAt: Date.now() + Math.max(0, Number(ttlMs) || 0) });
     this._trimCache();
     return value;
   }
@@ -109,14 +111,12 @@ class PerformanceManager {
 
   _samplePressure() {
     const memory = process.memoryUsage();
-    const heapLimit = Number(require('v8').getHeapStatistics().heap_size_limit || 0);
+    const heapLimit = Number(v8.getHeapStatistics().heap_size_limit || 0);
     const rssLimit = Number(this.config?.get('performance.rssLimitMb', 0) || 0) * 1024 * 1024;
     const heapRatio = heapLimit > 0 ? memory.heapUsed / heapLimit : 0;
     const rssRatio = rssLimit > 0 ? memory.rss / rssLimit : 0;
     const level = heapRatio >= 0.9 || rssRatio >= 0.9 ? 'critical'
-      : heapRatio >= 0.75 || rssRatio >= 0.75 ? 'high'
-      : 'normal';
-
+      : heapRatio >= 0.75 || rssRatio >= 0.75 ? 'high' : 'normal';
     this.pressure = { rssRatio, heapRatio, lagMs: this.pressure.lagMs, level };
     this.state?.setState('performance.pressure', this.pressure);
   }
