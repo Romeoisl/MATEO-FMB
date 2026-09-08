@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'setlang',category:'group',description:'Set the group language preference.',usage:'/setlang <code>',role:1,cooldown:2,async execute(ctx){const v=String(ctx.args[0]||'').toLowerCase().slice(0,8);if(!/^[a-z]{2,8}$/.test(v))return ctx.reply(ctx.error('Use a language code such as en.'));await ctx.groups.set(ctx.threadID,'language',v);return ctx.reply(ctx.format('Language',[`Group language: ${v}`]));}};
