@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'groupstats',category:'group',description:'Show stored group settings and activity.',usage:'/groupstats',role:0,cooldown:3,async execute(ctx){const g=ctx.group||{};const h=(ctx.db.data?.history||[]).filter(x=>String(x.threadID)===String(ctx.threadID));return ctx.reply(ctx.format('Group stats',[`Thread: ${ctx.threadID}`,`Admins: ${(g.adminIDs||[]).length}`,`History entries: ${h.length}`,`Anti-spam: ${g.antiSpam?'on':'off'}`,`Anti-link: ${g.antiLink?'on':'off'}`]));}};
