@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'setgoodbye',category:'group',description:'Enable or disable group goodbye handling.',usage:'/setgoodbye on|off',role:1,cooldown:2,async execute(ctx){const v=String(ctx.args[0]||'').toLowerCase();if(!['on','off'].includes(v))return ctx.reply(ctx.error('Usage: /setgoodbye on|off'));await ctx.groups.set(ctx.threadID,'goodbye',v==='on');return ctx.reply(ctx.format('Goodbye',[`Goodbye messages: ${v}`]));}};
