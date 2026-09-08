@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const http = require('http');
 
 class HealthServer {
@@ -8,6 +10,8 @@ class HealthServer {
     this.logger = logger;
     this.port = Number(port) || 0;
     this.server = null;
+    this.dashboard = fs.existsSync(path.join(process.cwd(), 'src', 'control', 'dashboard.html'))
+      ? fs.readFileSync(path.join(process.cwd(), 'src', 'control', 'dashboard.html'), 'utf8') : null;
   }
 
   _send(res, status, payload) {
@@ -20,6 +24,11 @@ class HealthServer {
     this.server = http.createServer((req, res) => {
       try {
         const url = new URL(req.url || '/', 'http://localhost');
+        if (url.pathname === '/' || url.pathname === '/dashboard') {
+          if (!this.dashboard) return this._send(res, 404, { error: 'dashboard_not_found' });
+          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+          return res.end(this.dashboard);
+        }
         if (url.pathname === '/health') return this._send(res, 200, { ok: true, ...this.app.status() });
         if (url.pathname === '/ready') {
           const status = this.app.status();
