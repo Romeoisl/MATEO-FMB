@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'base64',category:'utility',description:'Encode or decode Base64 text.',usage:'/base64 encode|decode <text>',role:0,cooldown:2,async execute(ctx){const mode=String(ctx.args.shift()||'encode').toLowerCase();const t=ctx.args.join(' ');if(!t)return ctx.reply(ctx.error('Provide text.'));try{const out=mode==='decode'?Buffer.from(t,'base64').toString('utf8'):Buffer.from(t,'utf8').toString('base64');return ctx.reply(out);}catch(e){return ctx.reply(ctx.error('Invalid Base64 input.'));}}};
