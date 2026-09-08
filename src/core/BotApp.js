@@ -18,6 +18,7 @@ const ConnectionManager = require('./ConnectionManager');
 const HealthServer = require('./HealthServer');
 const SafetyMonitor = require('./SafetyMonitor');
 const PerformanceManager = require('./PerformanceManager');
+const RecoveryManager = require('./RecoveryManager');
 const axios = require('axios');
 const AiProvider = require('../ai/AiProvider');
 
@@ -36,6 +37,7 @@ class BotApp {
     this.errors = new ErrorHandler({ logger: this.logger, state: this.state, formatter: this.formatter });
     this.safety = new SafetyMonitor({ state: this.state, logger: this.logger, config: this.config });
     this.performance = new PerformanceManager({ config: this.config, state: this.state, logger: this.logger });
+    this.recovery = new RecoveryManager({ state: this.state, logger: this.logger, safety: this.safety, performance: this.performance });
     this.ai = new AiProvider({ axios, config: this.config, performance: this.performance });
     this.moderation = new ModerationManager({ db: this.db, groups: this.groups, permissions: this.permissions, state: this.state, logger: this.logger });
     this.connection = new ConnectionManager({ config: this.config, state: this.state, events: this.events, logger: this.logger, rootDir, performance: this.performance });
@@ -43,6 +45,7 @@ class BotApp {
     const services = {
       ai: this.ai, groups: this.groups, users: this.users, moderation: this.moderation,
       formatter: this.formatter, errors: this.errors, safety: this.safety, performance: this.performance,
+      recovery: this.recovery,
     };
 
     this.commands = new CommandRegistry({ commandsDir: path.join(rootDir, 'src', 'cmds'), config: this.config,
@@ -70,6 +73,7 @@ class BotApp {
           }
           await this.commands.execute(api, event);
         } catch (error) {
+          this.recovery.recordFailure(error, 'message');
           this.errors.record(error, { scope: 'message' });
           if (api?.sendMessage && event?.threadID) {
             try { await api.sendMessage(this.errors.response(), event.threadID); } catch (sendError) { this.errors.record(sendError, { scope: 'message-response' }); }
@@ -79,17 +83,22 @@ class BotApp {
 
       this.events.on('connection:error', error => {
         const safety = this.safety.inspect(error, 'connection');
+        this.recovery.recordFailure(error, 'connection');
         this.errors.record(error, { scope: 'connection' });
         if (safety.action === 'pause') {
           this.connection.stopping = true;
           this.connection.listening = false;
         }
       });
-      this.events.on('listener:error', ({ type, error }) => this.errors.record(error, { scope: `event:${type}` }));
+      this.events.on('listener:error', ({ type, error }) => {
+        this.recovery.recordFailure(error, `event:${type}`);
+        this.errors.record(error, { scope: `event:${type}` });
+      });
       this._bindShutdownSignals();
       this._initialized = true;
       return this;
     } catch (error) {
+      this.recovery.recordFailure(error, 'init');
       this.errors.record(error, { scope: 'init' });
       throw error;
     }
@@ -117,6 +126,7 @@ class BotApp {
       return this;
     } catch (error) {
       const safety = this.safety.inspect(error, 'startup');
+      this.recovery.recordFailure(error, 'startup');
       this.errors.record(error, { scope: 'start' });
       if (safety.action === 'pause') this.connection.stopping = true;
       this.performance.stopMonitoring();
@@ -133,6 +143,7 @@ class BotApp {
       await this.health.stop();
       this.state.setState('status', 'offline');
     } catch (error) {
+      this.recovery.recordFailure(error, 'shutdown');
       this.errors.record(error, { scope: 'shutdown' });
       throw error;
     }
@@ -140,10 +151,18 @@ class BotApp {
 
   status() {
     const status = this.state.getStatus();
-    return { ...status, botName: this.config.get('botName'), commands: this.commands.commands.size,
-      users: this.db.data?.users?.length || 0, groups: this.db.data?.groups?.length || 0,
-      connected: Boolean(this.connection.api), uptime: Date.now() - this.startedAt,
-      safety: this.safety.status(), performance: this.performance.snapshot() };
+    return {
+      ...status,
+      botName: this.config.get('botName'),
+      commands: this.commands.commands.size,
+      users: this.db.data?.users?.length || 0,
+      groups: this.db.data?.groups?.length || 0,
+      connected: Boolean(this.connection.api),
+      uptime: Date.now() - this.startedAt,
+      safety: this.safety.status(),
+      recovery: this.recovery.snapshot(),
+      performance: this.performance.snapshot(),
+    };
   }
 
   _bindShutdownSignals() {
