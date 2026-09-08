@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'groupconfig',aliases:['gconfig'],category:'group',description:'Inspect current group configuration.',usage:'/groupconfig',role:1,cooldown:3,async execute(ctx){const g=ctx.group||{};return ctx.reply(ctx.format('Group config',[`Enabled: ${g.enabled?'yes':'no'}`,`Prefix: ${g.prefix||ctx.config.get('prefix','/')}`,`Language: ${g.language||'en'}`,`Welcome: ${g.welcome?'on':'off'}`,`Goodbye: ${g.goodbye?'on':'off'}`,`Anti-spam: ${g.antiSpam?'on':'off'}`,`Anti-link: ${g.antiLink?'on':'off'}`]));}};
