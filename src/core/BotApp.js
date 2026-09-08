@@ -36,7 +36,7 @@ class BotApp {
     this.errors = new ErrorHandler({ logger: this.logger, state: this.state, formatter: this.formatter });
     this.safety = new SafetyMonitor({ state: this.state, logger: this.logger, config: this.config });
     this.performance = new PerformanceManager({ config: this.config, state: this.state, logger: this.logger });
-    this.ai = new AiProvider({ axios, config: this.config });
+    this.ai = new AiProvider({ axios, config: this.config, performance: this.performance });
     this.moderation = new ModerationManager({ db: this.db, groups: this.groups, permissions: this.permissions, state: this.state, logger: this.logger });
     this.connection = new ConnectionManager({ config: this.config, state: this.state, events: this.events, logger: this.logger, rootDir, performance: this.performance });
 
