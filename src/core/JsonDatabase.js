@@ -30,13 +30,13 @@ class JsonDatabase {
       await this.write();
       return this.data;
     }
-
     try {
       const parsed = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       this.data = { ...clone(EMPTY_DB), ...parsed };
       if (!Array.isArray(this.data.users)) this.data.users = [];
       if (!Array.isArray(this.data.groups)) this.data.groups = [];
       if (!Array.isArray(this.data.history)) this.data.history = [];
+      this.data.history = this.data.history.slice(-5000);
       if (!this.data.statistics || typeof this.data.statistics !== 'object') this.data.statistics = clone(EMPTY_DB.statistics);
       this.data.statistics = { ...clone(EMPTY_DB.statistics), ...this.data.statistics };
     } catch (error) {
@@ -60,6 +60,7 @@ class JsonDatabase {
 
   async update(mutator) {
     if (typeof mutator !== 'function') throw new TypeError('Database update requires a function.');
+    if (!this.data) await this.init();
     const result = await mutator(this.data);
     await this.write();
     return result;
@@ -78,21 +79,11 @@ class JsonDatabase {
 
   async ensureUser(userID, name = '') {
     if (!userID) return null;
+    if (!this.data) await this.init();
     let user = this.getUser(userID);
     const now = new Date().toISOString();
     if (!user) {
-      user = {
-        userID: String(userID),
-        name: name || String(userID),
-        coins: 0,
-        level: 1,
-        xp: 0,
-        messages: 0,
-        commandsUsed: 0,
-        warnings: 0,
-        firstSeen: now,
-        lastSeen: now,
-      };
+      user = { userID: String(userID), name: name || String(userID), coins: 0, level: 1, xp: 0, messages: 0, commandsUsed: 0, warnings: 0, firstSeen: now, lastSeen: now };
       this.data.users.push(user);
     } else {
       user.lastSeen = now;
@@ -103,6 +94,23 @@ class JsonDatabase {
 
   getGroup(threadID) {
     return this.data?.groups?.find(group => String(group.threadID) === String(threadID)) || null;
+  }
+
+  async ensureGroup(threadID, defaults = {}) {
+    if (!threadID) return null;
+    if (!this.data) await this.init();
+    let group = this.getGroup(threadID);
+    if (!group) {
+      group = { threadID: String(threadID), ...clone(defaults) };
+      this.data.groups.push(group);
+    }
+    return group;
+  }
+
+  addHistory(entry, limit = 5000) {
+    if (!this.data) this.data = clone(EMPTY_DB);
+    this.data.history.push({ ...entry, timestamp: entry.timestamp || new Date().toISOString() });
+    if (this.data.history.length > limit) this.data.history = this.data.history.slice(-limit);
   }
 }
 
