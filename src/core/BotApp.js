@@ -68,7 +68,7 @@ class BotApp {
             if (api?.sendMessage) await api.sendMessage(this.formatter.box('Moderation', [moderation.reason]), event.threadID);
             return;
           }
-          await this.performance.run(() => this.commands.execute(api, event));
+          await this.commands.execute(api, event);
         } catch (error) {
           this.errors.record(error, { scope: 'message' });
           if (api?.sendMessage && event?.threadID) {
