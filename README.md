@@ -29,17 +29,20 @@ MATEO-FMB is an original modular Facebook Messenger bot framework designed aroun
 The runtime layer provides:
 
 - centralized configuration and state;
-- connection lifecycle and reconnect handling;
-- event dispatching;
+- connection lifecycle and bounded reconnect handling;
+- event dispatching through a centralized event bus;
 - command registration, permissions and cooldowns;
-- host-aware CPU and memory budgeting;
-- bounded command and network concurrency;
+- host-aware CPU and memory pressure monitoring;
+- **bounded command concurrency and bounded command queues** enforced on the live message path;
+- bounded network concurrency and optional byte-budget waiting for runtime-managed network work;
 - inbound/outbound network accounting;
 - cache and queue pressure controls;
 - event-loop and filesystem pressure monitoring;
 - safety detection for connection/authentication failures;
+- structured safety error codes with message-text classification only as a compatibility fallback;
 - recovery telemetry and graceful shutdown;
-- health/status reporting.
+- health/status reporting;
+- configurable 2–3 second per-thread outgoing message pacing by default.
 
 Performance profiles are available through `/performance low`, `medium`, `normal`, `high`, and `max`. The governor deliberately does not assume that all RAM, CPU or disk reported by a desktop/server belongs to the bot.
 
@@ -48,6 +51,16 @@ Performance profiles are available through `/performance low`, `medium`, `normal
 Commands are independently loaded from `src/cmds/` and events from `src/events/`. The command context exposes stable services such as database, groups, users, moderation, AI, formatting, safety, performance and recovery.
 
 Feature modules should remain replaceable and should use the runtime services instead of creating their own competing schedulers, resource pools or configuration systems.
+
+## Data and persistence
+
+The default persistence layer is a small JSON database intended for a single bot process and modest workloads. It is deliberately simple for v1 and can be replaced behind the database service boundary later; the project does **not** claim horizontal database scalability in this release.
+
+Runtime database/state files are local deployment artifacts and must not be committed. AppState and `.env` are also local secrets/configuration and must never be committed.
+
+## FCA compatibility
+
+MATEO-FMB pins `ws3-fca` to **3.5.2** instead of using a floating version. This is intentional: Messenger/FCA-compatible forks can change callback behavior and event semantics between releases. Pinning makes deployments reproducible and keeps the adapter contract stable for v1. Upgrade the pinned version only after validating connection, event, messaging and shutdown behavior.
 
 ## Control plane
 
@@ -65,7 +78,8 @@ Never commit AppState, `.env`, logs, database files containing private runtime d
 2. Provide Facebook AppState locally through `appstate.json` or `MATEO_APPSTATE_FILE`.
 3. Configure `settings.json` and environment variables.
 4. Start with `npm start`.
+5. Run `npm test` before deploying changes.
 
 ## Design goals
 
-MATEO-FMB is not built around a single giant command file. The target is a resilient runtime with independently scalable feature and control layers, so additional commands, media providers, AI integrations, economy systems and group features can be added without destabilizing the process.
+MATEO-FMB is not built around a single giant command file. The target is a resilient runtime with modular feature and control layers, so additional commands, media providers, AI integrations, economy systems and group features can be added without destabilizing the process.
