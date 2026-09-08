@@ -4,6 +4,10 @@
  * Watches authentication/connection failures for signs that the account or
  * session may have been restricted. This does not bypass platform enforcement;
  * it pauses automatic retries so an uncertain failure can be reviewed safely.
+ *
+ * Integrations can provide error.code to avoid relying on message text. The
+ * message classifier remains as a compatibility fallback for third-party FCA
+ * errors that expose no stable code.
  */
 class SafetyMonitor {
   constructor({ state, logger, config } = {}) {
@@ -15,6 +19,23 @@ class SafetyMonitor {
   }
 
   classify(error) {
+    const code = String(error?.code || '').toUpperCase();
+    const structured = {
+      AUTH: 'authentication',
+      AUTHENTICATION: 'authentication',
+      APPSTATE: 'authentication',
+      RATE_LIMIT: 'rate_limit',
+      THROTTLED: 'rate_limit',
+      NETWORK: 'connection',
+      CONNECTION: 'connection',
+      TIMEOUT: 'connection',
+      SOCKET: 'connection',
+      SUSPENSION: 'suspension',
+      RESTRICTED: 'suspension',
+      CHECKPOINT: 'suspension',
+    };
+    if (structured[code]) return structured[code];
+
     const text = String(error?.message || error || '').toLowerCase();
     const patterns = [
       ['suspension', /suspend|disabled|deactivated|restricted|checkpoint|locked out/],
