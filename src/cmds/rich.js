@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'rich',aliases:['richlist','topcoins'],category:'economy',description:'Show the richest stored users.',usage:'/rich',role:0,cooldown:5,async execute(ctx){const users=[...(ctx.db.data?.users||[])].sort((a,b)=>(b.coins||0)-(a.coins||0)).slice(0,10);return ctx.reply(ctx.format('Rich list',users.length?users.map((u,i)=>`${i+1}. ${u.name||u.userID} — ${u.coins||0} coins`):['No users yet.']));}};
