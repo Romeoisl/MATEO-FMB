@@ -1,57 +1,71 @@
 # MATEO-FMB
 
-MATEO-FMB is an original, modular Facebook Messenger bot framework built around a small core engine and independently loaded commands and events.
+MATEO-FMB is an original modular Facebook Messenger bot framework designed around one principle: **features should never compromise runtime stability**.
 
-## Current architecture
+## Architecture
 
 ```text
-MATEO-FMB
-├── index.js              # process entrypoint
-├── src/
-│   ├── bootstrap.js      # application startup
-│   ├── core/             # configuration, connection, events, commands, state
-│   ├── cmds/              # commands (migrated incrementally)
-│   └── events/            # event handlers (migrated incrementally)
-├── settings.json         # non-secret application defaults
-├── db.json               # local JSON database during the migration
-└── appstate.json         # local-only login state; never commit this file
+                         MATEO-FMB
+                             │
+          ┌──────────────────┼──────────────────┐
+          │                  │                  │
+       RUNTIME            FEATURES           CONTROL
+          │                  │                  │
+    Performance          Commands           Dashboard*
+    Resource             Media              Metrics*
+    Governor             AI                 Config
+    Safety               Economy             Logs
+    Recovery             Groups              Health
+          │                  │                  │
+          └──────────────────┼──────────────────┘
+                             │
+                       Stable Runtime
 ```
 
-## Phase 1
+\* The control-plane API is intentionally separated from bot feature code so a future dashboard can consume the same runtime state without becoming part of the command engine.
 
-The foundation now provides:
+## Runtime
 
-- a long-lived application process instead of timer-based self-restarts;
-- centralized configuration, logging and runtime state;
-- a connection manager with login/error/reconnect handling;
-- an event bus and event loader;
-- a command registry with aliases, metadata and permission checks;
-- a command context API for newly migrated commands;
-- a JSON database adapter that keeps existing commands working during migration;
-- a four-level permission model: user, group admin, bot admin, owner;
-- safe repository defaults for local AppState and runtime files.
+The runtime layer provides:
 
-Existing commands and events remain in place and are being migrated through a compatibility bridge rather than discarded.
+- centralized configuration and state;
+- connection lifecycle and reconnect handling;
+- event dispatching;
+- command registration, permissions and cooldowns;
+- host-aware CPU and memory budgeting;
+- bounded command and network concurrency;
+- inbound/outbound network accounting;
+- cache and queue pressure controls;
+- event-loop and filesystem pressure monitoring;
+- safety detection for connection/authentication failures;
+- recovery telemetry and graceful shutdown;
+- health/status reporting.
+
+Performance profiles are available through `/performance low`, `medium`, `normal`, `high`, and `max`. The governor deliberately does not assume that all RAM, CPU or disk reported by a desktop/server belongs to the bot.
+
+## Features
+
+Commands are independently loaded from `src/cmds/` and events from `src/events/`. The command context exposes stable services such as database, groups, users, moderation, AI, formatting, safety, performance and recovery.
+
+Feature modules should remain replaceable and should use the runtime services instead of creating their own competing schedulers, resource pools or configuration systems.
+
+## Control plane
+
+The application exposes structured status through the health server. Runtime status includes connection state, command/user/group counts, safety state, recovery state and performance telemetry. This provides the foundation for a dashboard and operational tooling without coupling a web UI to the bot's internals.
+
+## Configuration
+
+`settings.json` contains non-secret defaults. Environment variables can override deployment-sensitive values. Runtime configuration can be persisted through `ConfigManager` when an operational setting is intentionally changed.
+
+Never commit AppState, `.env`, logs, database files containing private runtime data, or generated state.
 
 ## Setup
 
 1. Install dependencies with `npm install`.
-2. Copy your Facebook AppState to the local `appstate.json` file, or set `MATEO_APPSTATE_FILE`.
-3. Adjust `settings.json` for non-secret bot configuration.
+2. Provide Facebook AppState locally through `appstate.json` or `MATEO_APPSTATE_FILE`.
+3. Configure `settings.json` and environment variables.
 4. Start with `npm start`.
 
-Never commit AppState, `.env`, logs, or runtime state to Git.
+## Design goals
 
-## Roadmap
-
-1. Foundation
-2. Global and per-group configuration
-3. Database abstraction and user/group/statistics stores
-4. Essential commands and administration
-5. Event system expansion
-6. Protection and moderation
-7. Economy and profiles
-8. AI provider abstraction and conversations
-9. Media and utilities
-10. Deployment and health monitoring
-11. Documentation, performance and security polish
+MATEO-FMB is not built around a single giant command file. The target is a resilient runtime with independently scalable feature and control layers, so additional commands, media providers, AI integrations, economy systems and group features can be added without destabilizing the process.
