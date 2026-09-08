@@ -1,0 +1,3 @@
+'use strict';
+const choices=['rock','paper','scissors'];
+module.exports={name:'rps',category:'fun',description:'Play rock paper scissors.',usage:'/rps rock|paper|scissors',role:0,cooldown:2,async execute(ctx){const pick=String(ctx.args[0]||'').toLowerCase();if(!choices.includes(pick))return ctx.reply(ctx.error('Choose rock, paper, or scissors.'));const bot=choices[Math.floor(Math.random()*3)];const win=pick===bot?'Draw':((pick==='rock'&&bot==='scissors')||(pick==='paper'&&bot==='rock')||(pick==='scissors'&&bot==='paper')?'You win':'You lose');return ctx.reply(ctx.format('RPS',[`You: ${pick}`,`Bot: ${bot}`,win]));}};
