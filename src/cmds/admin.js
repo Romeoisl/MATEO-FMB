@@ -2,7 +2,7 @@
 
 module.exports = {
   name: 'admin',
-  aliases: ['admins', 'botadmin'],
+  aliases: ['botadmin'],
   category: 'system',
   description: 'Manage MATEO-FMB bot administrators.',
   usage: '/admin <list|add|remove|check> [userID]',
@@ -26,6 +26,7 @@ module.exports = {
     }
 
     if (action === 'remove') {
+      if (target === String(ctx.config.get('ownerID', '') || '')) return ctx.reply(ctx.error('The bot owner cannot be removed from owner configuration.'));
       const next = ids.filter(id => id !== target);
       if (next.length === ids.length) return ctx.reply(ctx.error('That user is not a bot admin.'));
       ctx.config.set('adminIDs', next);
