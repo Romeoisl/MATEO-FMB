@@ -1,2 +1,0 @@
-'use strict';
-module.exports={name:'leaderboard2',aliases:['topmessages'],category:'users',description:'Show users with the most stored messages.',usage:'/leaderboard2',role:0,cooldown:5,async execute(ctx){const u=[...(ctx.db.data?.users||[])].sort((a,b)=>(b.messages||0)-(a.messages||0)).slice(0,10);return ctx.reply(ctx.format('Message leaderboard',u.length?u.map((x,i)=>`${i+1}. ${x.name||x.userID} — ${x.messages||0}`):['No users yet.']));}};
