@@ -38,7 +38,7 @@ class BotApp {
     this.performance = new PerformanceManager({ config: this.config, state: this.state, logger: this.logger });
     this.ai = new AiProvider({ axios, config: this.config });
     this.moderation = new ModerationManager({ db: this.db, groups: this.groups, permissions: this.permissions, state: this.state, logger: this.logger });
-    this.connection = new ConnectionManager({ config: this.config, state: this.state, events: this.events, logger: this.logger, rootDir });
+    this.connection = new ConnectionManager({ config: this.config, state: this.state, events: this.events, logger: this.logger, rootDir, performance: this.performance });
 
     const services = {
       ai: this.ai, groups: this.groups, users: this.users, moderation: this.moderation,
@@ -68,7 +68,7 @@ class BotApp {
             if (api?.sendMessage) await api.sendMessage(this.formatter.box('Moderation', [moderation.reason]), event.threadID);
             return;
           }
-          await this.commands.execute(api, event);
+          await this.performance.run(() => this.commands.execute(api, event));
         } catch (error) {
           this.errors.record(error, { scope: 'message' });
           if (api?.sendMessage && event?.threadID) {
