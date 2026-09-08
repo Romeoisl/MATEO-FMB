@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'percentage',aliases:['percent'],category:'utility',description:'Calculate a percentage of a number.',usage:'/percentage <percent> <number>',role:0,cooldown:2,async execute(ctx){const p=Number(ctx.args[0]),n=Number(ctx.args[1]);if(!Number.isFinite(p)||!Number.isFinite(n))return ctx.reply(ctx.error('Usage: /percentage <percent> <number>'));return ctx.reply(ctx.format('Percentage',[`${p}% of ${n} = ${(p*n/100)}`]));}};
