@@ -1,0 +1,2 @@
+'use strict';
+module.exports={name:'unmute',category:'group',description:'Remove a stored mute marker for a user.',usage:'/unmute <userID>',role:1,cooldown:3,async execute(ctx){const id=ctx.args[0];if(!id)return ctx.reply(ctx.error('Provide a user ID.'));const u=await ctx.db.ensureUser(id);u.muted=false;await ctx.db.write();return ctx.reply(ctx.format('Mute',[`User ${id} is no longer marked muted. API enforcement depends on Messenger support.`]));}};
