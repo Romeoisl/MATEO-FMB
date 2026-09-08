@@ -27,6 +27,10 @@ class GroupManager {
     return existing || { threadID: id, ...clone(DEFAULTS) };
   }
 
+  isApproved(threadID) {
+    return this.get(threadID).approved === true;
+  }
+
   async ensure(threadID, overrides = {}) {
     const id = String(threadID);
     let group = this.db.data.groups.find(item => String(item.threadID) === id);
