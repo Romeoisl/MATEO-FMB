@@ -1,2 +1,33 @@
 'use strict';
-module.exports={name:'commands',aliases:['cmds','menu'],category:'system',description:'List commands by category.',usage:'/commands [category]',role:0,async execute(ctx){const wanted=ctx.args[0]?.toLowerCase(); const list=ctx.registry.list().filter(c=>!wanted||c.category===wanted).sort((a,b)=>a.name.localeCompare(b.name)); if(!list.length)return ctx.reply(ctx.error(`No commands found for category: ${wanted}`)); const grouped=new Map(); for(const c of list){if(!grouped.has(c.category))grouped.set(c.category,[]);grouped.get(c.category).push(c);} const lines=[]; for(const [cat,items] of grouped){lines.push(`[ ${cat.toUpperCase()} ]`); for(const c of items)lines.push(`${ctx.prefix}${c.name}`);} return ctx.reply(ctx.format('Commands',lines,{includeTagline:true}));}};
+
+module.exports = {
+  name: 'commands',
+  aliases: ['cmds'],
+  category: 'system',
+  description: 'List commands by category.',
+  usage: '/commands [category]',
+  role: 0,
+
+  async execute(ctx) {
+    const wanted = ctx.args[0]?.toLowerCase();
+    const list = ctx.registry.list()
+      .filter(command => !wanted || command.category === wanted)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (!list.length) return ctx.reply(ctx.error(`No commands found for category: ${wanted}`));
+
+    const grouped = new Map();
+    for (const command of list) {
+      if (!grouped.has(command.category)) grouped.set(command.category, []);
+      grouped.get(command.category).push(command);
+    }
+
+    const lines = [];
+    for (const [category, items] of grouped) {
+      lines.push(`[ ${category.toUpperCase()} ]`);
+      for (const command of items) lines.push(`${ctx.prefix}${command.name}`);
+    }
+
+    return ctx.reply(ctx.format('Commands', lines, { includeTagline: true }));
+  },
+};
