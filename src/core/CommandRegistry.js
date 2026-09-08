@@ -7,9 +7,7 @@ const CommandContext = require('./CommandContext');
 class CommandRegistry {
   constructor({ commandsDir, config, db, permissions, logger, state, services = {} }) {
     Object.assign(this, { commandsDir, config, db, permissions, logger, state, services });
-    this.commands = new Map();
-    this.aliases = new Map();
-    this.cooldowns = new Map();
+    this.commands = new Map(); this.aliases = new Map(); this.cooldowns = new Map();
   }
 
   load() {
@@ -57,7 +55,16 @@ class CommandRegistry {
     const tokens = input.split(/\s+/); const name = tokens.shift()?.toLowerCase(); if (!name) return false;
     const command = this.get(name); if (!command) return false;
     const group = this.db.getGroup?.(message.threadID);
-    if (group && group.enabled === false && command.name !== 'start') { await api.sendMessage(`MATEO-FMB is disabled here. Ask a bot admin to use ${prefix}start.`, message.threadID); return true; }
+
+    if (group && group.approved === false && command.name !== 'approve') {
+      const isGlobalAdmin = this.permissions.hasLevel(message.senderID, message.threadID, 2);
+      if (!isGlobalAdmin) {
+        await api.sendMessage(this.services.formatter?.error('This group is awaiting MATEO-FMB approval.') || 'This group is awaiting MATEO-FMB approval.', message.threadID);
+        return true;
+      }
+    }
+
+    if (group && group.enabled === false && command.name !== 'start' && command.name !== 'approve') { await api.sendMessage(`MATEO-FMB is disabled here. Ask a bot admin to use ${prefix}start.`, message.threadID); return true; }
     if (!this.permissions.hasLevel(message.senderID, message.threadID, command.role)) { const formatter = this.services.formatter; await api.sendMessage(formatter?.error('You do not have permission to use this command.') || 'You do not have permission to use this command.', message.threadID); return true; }
     const remaining = this._remainingCooldown(command, message.senderID, message.threadID);
     if (remaining > 0) { const wait = `Please wait ${Math.ceil(remaining / 1000)}s before using this command again.`; await api.sendMessage(this.services.formatter?.error(wait) || wait, message.threadID); return true; }
