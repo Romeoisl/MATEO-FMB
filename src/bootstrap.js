@@ -28,25 +28,20 @@ function printConfig(app) {
   console.log(`  Config > language: ${app.config.get('language', 'en')}`);
   console.log(`  Config > appstate: ${process.env.MATEO_APPSTATE_FILE || 'appstate.json'}`);
   console.log(`  Config > admins: ${app.config.get('adminIDs', []).length}`);
+  console.log(`  Config > performance: ${app.performance.mode}`);
 }
 
 async function main() {
   printBanner();
-
   const app = new BotApp({ rootDir: process.cwd() });
 
   try {
     printConfig(app);
-    await app.init();
-    console.log(`[MATEO-FMB] Commands loaded: ${app.commands.commands.size}`);
-    console.log(`[MATEO-FMB] Users loaded: ${app.db.data?.users?.length || 0}`);
-    console.log('[MATEO-FMB] Logging in...');
-    await app.connection.connect();
-    console.log('[MATEO-FMB] Login successful.');
+    await app.start();
     app.logger.info(`${app.config.get('botName')} started.`);
   } catch (error) {
     if (error instanceof ConnectionManager.AppStateError) {
-      console.log('[MATEO-FMB] AppState missing. Shutting down.');
+      console.log('[MATEO-FMB] AppState missing or invalid. Shutting down.');
       await app.shutdown('missing-appstate').catch(() => {});
       return;
     }
