@@ -1,7 +1,7 @@
 'use strict';
 
 const changeNickname = (api, nickname, threadID, userID) => {
-  if (typeof api?.changeNickname !== 'function') return Promise.resolve(false);
+  if (typeof api?.changeNickname !== 'function' || !userID) return Promise.resolve(false);
   return new Promise(resolve => {
     let settled = false;
     const done = error => {
@@ -16,6 +16,16 @@ const changeNickname = (api, nickname, threadID, userID) => {
       done(new Error('Nickname update failed.'));
     }
   });
+};
+
+const send = async (api, text, threadID) => {
+  if (!api?.sendMessage || !threadID || !text) return false;
+  try {
+    await api.sendMessage(text, threadID);
+    return true;
+  } catch (_) {
+    return false;
+  }
 };
 
 module.exports = {
@@ -34,42 +44,50 @@ module.exports = {
     const group = await ctx.groups.ensure(targetID);
     if (group.approved === true) {
       return ctx.reply(ctx.format('Approval', [
-        'This group is already approved.',
+        'This group is already approved and active.',
         `Thread ID: ${targetID}`,
-      ]));
+      ], { includeTagline: true }));
     }
 
     await ctx.groups.approve(targetID, ctx.userID);
 
-    const botName = ctx.config.get('botName', 'MATEO-FMB');
+    const botName = String(ctx.config.get('botName', 'MATEO-FMB') || 'MATEO-FMB');
+    const defaultPrefix = String(ctx.config.get('prefix', '/') || '/');
+    const targetGroup = ctx.groups.get(targetID);
+    const prefix = targetGroup?.prefix || defaultPrefix;
     const api = ctx.api;
     const botID = String(api.getCurrentUserID?.() || '');
     const nicknameUpdated = await changeNickname(api, botName, targetID, botID);
 
     const introduction = [
       `╭─ ${botName}`,
-      '│ CONNECTION ESTABLISHED',
+      '│ GROUP ACTIVATED',
       '│',
-      '│ Thank you for approving me.',
-      '│ I am now active in this group.',
+      '│ Approval confirmed. Thank you for having me here.',
       '│',
-      `│ Prefix: ${ctx.groups.get(targetID)?.prefix || ctx.config.get('prefix', '/')}`,
-      `│ Name: ${botName}`,
-      `│ Nickname: ${nicknameUpdated ? 'Updated' : 'Unavailable'}`,
+      `│ Name      : ${botName}`,
+      `│ Prefix    : ${prefix}`,
+      `│ Nickname  : ${nicknameUpdated ? 'Updated' : 'Not changed'}`,
+      '│ Status    : Online & ready',
       '│',
-      `│ Use ${ctx.config.get('prefix', '/')}help to explore my commands.`,
-      '╰─ MATEO-FMB ─╯',
+      `│ Use ${prefix}help to explore my commands.`,
+      '│ Use the group settings command to customize me.',
+      '│',
+      '╰─ MATEO-FMB • READY ─╯',
     ].join('\n');
 
-    await api.sendMessage(introduction, targetID);
+    const introductionSent = await send(api, introduction, targetID);
 
-    return ctx.reply(ctx.format('Group Approved', [
+    const result = [
       `Thread ID: ${targetID}`,
-      'Status: Approved and active',
+      'Status: Approved & active',
       `Bot name: ${botName}`,
-      `Nickname: ${nicknameUpdated ? 'Updated successfully' : 'Could not update'}`,
+      `Nickname: ${nicknameUpdated ? 'Updated successfully' : 'Unavailable'}`,
+      `Introduction: ${introductionSent ? 'Sent' : 'Could not send'}`,
       '',
-      'The group can now use MATEO-FMB commands.',
-    ], { includeTagline: true }));
+      'This group is now unlocked for MATEO-FMB commands.',
+    ];
+
+    return ctx.reply(ctx.format('Group Approved', result, { includeTagline: true }));
   },
 };
